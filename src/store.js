@@ -270,3 +270,26 @@ export function seedActivityIfEmpty() {
   }
   persistence.setActivity(seeded)
 }
+
+// ── Epic Quest segédletek ─────────────────────────────────────────────────────
+/** Hátralévő napok az Epic Quest határidejéig (negatív = lejárt) */
+export function getEpicDaysRemaining(dueDate) {
+  if (!dueDate) return null
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const due   = new Date(dueDate + 'T00:00:00')
+  return Math.ceil((due - today) / 86_400_000)
+}
+
+/** Teljes napok száma a létrehozástól a határidőig (minimum 1) */
+export function getEpicTotalDays(createdDate, dueDate) {
+  if (!createdDate || !dueDate) return null
+  const created = new Date(createdDate + 'T00:00:00')
+  const due     = new Date(dueDate     + 'T00:00:00')
+  return Math.max(1, Math.ceil((due - created) / 86_400_000))
+}
+
+/** True ha ≤ 3 nap van hátra a határidőig (dilation trigger) */
+export function isEpicInDanger(dueDate) {
+  const rem = getEpicDaysRemaining(dueDate)
+  return rem !== null && rem >= 0 && rem <= 3
+}

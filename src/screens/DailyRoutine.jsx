@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, memo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import EstimatedFinishBanner from '../components/EstimatedFinishBanner'
+import AddRoutineForm        from '../components/AddRoutineForm'
 import {
   CATEGORIES, POLARITY,
   persistence, todayISO,
@@ -75,7 +76,6 @@ export default function DailyRoutine() {
     if (!lastISO) return
     const lastRoutine = persistence.getRoutine(lastISO)
     if (!lastRoutine || !lastRoutine.length) return
-    // Completion-t töröljük — az időstruktúrát megtartjuk
     const reset  = lastRoutine.map(b => ({ ...b, completed: false }))
     const finish = getEstimatedFinish(reset)
     setBlocks(reset)
@@ -92,6 +92,20 @@ export default function DailyRoutine() {
     if (finish) persistence.setBaselineFinish(iso, finish)
   }
 
+  // ── Új blokk hozzáadása — auto-sort startTime alapján ────────────────────
+  function handleAddBlock(newBlock) {
+    setBlocks(prev => {
+      const updated = [...prev, newBlock]
+      updated.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
+      return updated
+    })
+  }
+
+  // ── Blokk törlése ─────────────────────────────────────────────────────────
+  const handleDeleteBlock = useCallback((blockId) => {
+    setBlocks(prev => prev.filter(b => b.id !== blockId))
+  }, [])
+
   const hasLastWeekday = !!getLastOccurrenceISO(todayName) &&
     !!persistence.getRoutine(getLastOccurrenceISO(todayName) ?? '')
 
@@ -99,23 +113,28 @@ export default function DailyRoutine() {
     <div className="w-full min-h-screen bg-[#0a0a0f]">
 
       {/* ── Fejléc ──────────────────────────────────────────────────────────── */}
-      <header className="px-4 pt-safe-top border-b border-white/[0.06] bg-[#0a0a0f]/90 backdrop-blur-xl">
+      <header className="px-4 pt-safe-top border-b border-white/6 bg-[#0a0a0f]/90 backdrop-blur-xl">
         <div className="pt-10 pb-4">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h1 className="text-[24px] font-black tracking-tight leading-none text-white">
-                Daily Routine
+              {/* Kiemelés: nap neve — nagyobb, maszkulin, neon ragyogás */}
+              <h1
+                className="text-[36px] font-black tracking-tighter leading-none text-white"
+                style={{ textShadow: '0 0 28px rgba(139,92,246,0.55), 0 0 56px rgba(139,92,246,0.22)' }}
+              >
+                {getWeekdayLabel(todayName).toUpperCase()}
               </h1>
-              <p className="text-[11px] font-medium text-white/30 mt-1 tracking-widest uppercase">
-                {getWeekdayLabel(todayName)} · {blocks.length} blocks
+              <p className="text-[10px] font-semibold text-white/28 mt-1.5 tracking-widest uppercase">
+                Daily Routine · {blocks.length} blocks
               </p>
             </div>
 
             {/* Befejezési idő összesítő */}
             {estimatedFinish && (
               <div className="text-right">
-                <p className="text-[9px] font-bold uppercase tracking-widest text-white/25">Finish</p>
-                <p className="text-[20px] font-black tabular-nums leading-tight"
+                <p className="text-[9px] font-bold uppercase tracking-widest text-white/22">Est. Finish</p>
+                <p
+                  className="text-[22px] font-black tabular-nums leading-tight"
                   style={{
                     background: delayMinutes > 0
                       ? 'linear-gradient(90deg,#f59e0b,#ef4444)'
@@ -131,23 +150,33 @@ export default function DailyRoutine() {
 
           {/* Time-Machine gombok */}
           <div className="flex gap-2">
-            {hasLastWeekday && (
-              <motion.button
-                whileTap={{ scale: 0.93 }}
-                onClick={loadLastWeekday}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-violet-500/30 bg-violet-500/10 text-[11px] font-bold text-violet-300"
-              >
-                <span className="text-[12px]">⏪</span>
-                Load Last {getWeekdayLabel(todayName)}
-              </motion.button>
-            )}
+            {/* Reset Default */}
             <motion.button
               whileTap={{ scale: 0.93 }}
               onClick={loadDefault}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 bg-white/[0.04] text-[11px] font-bold text-white/40"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 bg-white/4 text-[11px] font-bold text-white/38"
             >
               <span className="text-[12px]">↺</span>
               Reset Default
+            </motion.button>
+
+            {/* 🕒 Load Last [Weekday] — mindig látható, disabled ha nincs adat */}
+            <motion.button
+              whileTap={hasLastWeekday ? { scale: 0.93 } : {}}
+              onClick={hasLastWeekday ? loadLastWeekday : undefined}
+              disabled={!hasLastWeekday}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-bold transition-all duration-200"
+              style={{
+                borderColor: hasLastWeekday ? 'rgba(139,92,246,0.42)' : 'rgba(255,255,255,0.07)',
+                background:  hasLastWeekday ? 'rgba(139,92,246,0.12)' : 'rgba(255,255,255,0.02)',
+                color:       hasLastWeekday ? '#a78bfa'                : 'rgba(255,255,255,0.18)',
+                opacity:     hasLastWeekday ? 1                        : 0.65,
+                cursor:      hasLastWeekday ? 'pointer'                : 'default',
+              }}
+              title={hasLastWeekday ? undefined : `No saved data for last ${getWeekdayLabel(todayName)}`}
+            >
+              <span className="text-[12px]">🕒</span>
+              Load Last {getWeekdayLabel(todayName)}
             </motion.button>
           </div>
         </div>
@@ -159,13 +188,16 @@ export default function DailyRoutine() {
         delayMinutes={delayMinutes}
       />
 
+      {/* ── Dinamikus blokk hozzáadó form ────────────────────────────────────── */}
+      <AddRoutineForm onAdd={handleAddBlock} />
+
       {/* ── Idővonal blokkok ─────────────────────────────────────────────────── */}
-      <div className="px-4 pt-3 pb-8">
+      <div className="px-4 pt-3 pb-32">
         {blocks.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="text-4xl mb-3 opacity-30">🕐</div>
             <p className="text-white/20 text-[13px] leading-relaxed">
-              No routine blocks.<br />Reset to the default or load last {getWeekdayLabel(todayName)}.
+              No routine blocks.<br />Add one above, reset to default, or load last {getWeekdayLabel(todayName)}.
             </p>
           </div>
         )}
@@ -187,6 +219,7 @@ export default function DailyRoutine() {
                 isPast={isPast}
                 onToggle={() => handleToggle(block.id)}
                 onCascade={delta => handleCascade(block.id, delta)}
+                onDelete={() => handleDeleteBlock(block.id)}
               />
             )
           })}
@@ -198,7 +231,7 @@ export default function DailyRoutine() {
 
 // ── Routine blokk komponens ──────────────────────────────────────────────────
 
-const RoutineBlock = memo(function RoutineBlock({ block, index, isActive, isPast, onToggle, onCascade }) {
+const RoutineBlock = memo(function RoutineBlock({ block, index, isActive, isPast, onToggle, onCascade, onDelete }) {
   const cat = CATEGORIES[block.category] ?? CATEGORIES.grind
   const pol = POLARITY[block.polarity ?? 'neutral']
   const dur = blockDuration(block.startTime, block.endTime)
@@ -301,6 +334,21 @@ const RoutineBlock = memo(function RoutineBlock({ block, index, isActive, isPast
               <CascadeButton label="+10m" onClick={() => onCascade(10)} />
               <CascadeButton label="+20m" onClick={() => onCascade(20)} />
             </div>
+          )}
+
+          {/* Blokk törlése */}
+          {!block.completed && (
+            <motion.button
+              whileTap={{ scale: 0.75 }}
+              onClick={onDelete}
+              className="w-5 h-5 flex items-center justify-center rounded opacity-22 hover:opacity-75 active:opacity-90 transition-opacity duration-150"
+              style={{ color: '#ef4444' }}
+              aria-label="Delete block"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </motion.button>
           )}
 
           {/* Kész checkmark */}

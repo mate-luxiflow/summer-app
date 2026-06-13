@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CATEGORIES, POLARITY, getDefaultPolarity, cyclePolarity } from '../store'
+import { CATEGORIES, POLARITY, getDefaultPolarity, cyclePolarity, todayISO } from '../store'
 
 const PRESETS = Object.entries(CATEGORIES).filter(([k]) => k !== 'grind')
 
@@ -10,6 +10,9 @@ export default function AddQuestBar({ onAdd }) {
   const [category, setCategory] = useState(null)
   // polarity auto-set a kategória alapján, manuálisan felülbírálható
   const [polarity, setPolarity] = useState('neutral')
+  // Epic Quest toggle + due date
+  const [isEpic,   setIsEpic]   = useState(false)
+  const [dueDate,  setDueDate]  = useState('')
   const inputRef = useRef(null)
 
   function handleChipTap(key) {
@@ -29,6 +32,13 @@ export default function AddQuestBar({ onAdd }) {
     setPolarity(prev => cyclePolarity(prev))
   }
 
+  function handleEpicToggle() {
+    setIsEpic(v => {
+      if (v) setDueDate('') // reset dueDate when turning off
+      return !v
+    })
+  }
+
   function submit() {
     const trimmed = text.trim()
     if (!trimmed && !category) return
@@ -36,10 +46,20 @@ export default function AddQuestBar({ onAdd }) {
     const cat  = category ?? 'grind'
     const name = trimmed || CATEGORIES[cat].label
 
-    onAdd({ text: name, category: cat, priority: 'medium', polarity })
+    onAdd({
+      text: name,
+      category: cat,
+      priority: 'medium',
+      polarity,
+      isEpic,
+      dueDate:     isEpic ? (dueDate || null) : null,
+      createdDate: todayISO(),
+    })
     setText('')
     setCategory(null)
     setPolarity('neutral')
+    setIsEpic(false)
+    setDueDate('')
     inputRef.current?.focus()
   }
 
@@ -155,6 +175,66 @@ export default function AddQuestBar({ onAdd }) {
           </svg>
           <span>Add</span>
         </motion.button>
+      </div>
+
+      {/* ── Sor 1.5: Epic Quest toggle + dueDate (feltételes sor) ────────── */}
+      <div className="flex items-center gap-2 mb-2.5">
+        {/* Epic toggle pill */}
+        <motion.button
+          onClick={handleEpicToggle}
+          whileTap={{ scale: 0.91 }}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all duration-200"
+          style={{
+            borderColor: isEpic ? '#f59e0b88' : 'rgba(255,255,255,0.08)',
+            background:  isEpic ? '#f59e0b18'  : 'rgba(255,255,255,0.03)',
+            color:       isEpic ? '#f59e0b'    : 'rgba(255,255,255,0.25)',
+            boxShadow:   isEpic ? '0 0 12px #f59e0b30' : 'none',
+          }}
+        >
+          <span className="text-[11px]">⚡</span>
+          <span>Epic Quest</span>
+          {/* Toggle pill indicator */}
+          <div
+            className="relative w-6 h-3 rounded-full transition-all duration-200 ml-0.5"
+            style={{ background: isEpic ? '#f59e0b' : 'rgba(255,255,255,0.12)' }}
+          >
+            <motion.div
+              animate={{ x: isEpic ? 12 : 1 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+              className="absolute top-0.5 w-2 h-2 rounded-full bg-white"
+            />
+          </div>
+        </motion.button>
+
+        {/* Due Date input — csak Epic módban látható */}
+        <AnimatePresence>
+          {isEpic && (
+            <motion.div
+              initial={{ opacity: 0, width: 0, x: -8 }}
+              animate={{ opacity: 1, width: 'auto', x: 0 }}
+              exit={{ opacity: 0, width: 0, x: -8 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="overflow-hidden"
+            >
+              <div className="flex items-center gap-1.5 pl-1">
+                <span className="text-[9px] font-bold text-white/25 uppercase tracking-wider whitespace-nowrap">Due</span>
+                <input
+                  type="date"
+                  value={dueDate}
+                  min={todayISO()}
+                  onChange={e => setDueDate(e.target.value)}
+                  className="h-7 rounded-lg px-2 text-[11px] font-semibold text-amber-300 outline-none border"
+                  style={{
+                    background:   '#f59e0b10',
+                    borderColor:  '#f59e0b40',
+                    colorScheme:  'dark',
+                    minWidth:     '130px',
+                  }}
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* ── Sor 2: Kategória chipek (vízszintes scroll) ────────────────────── */}

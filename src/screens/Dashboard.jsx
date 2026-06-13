@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import XPHeader    from '../components/XPHeader'
-import QuestRow    from '../components/QuestRow'
-import AddQuestBar from '../components/AddQuestBar'
-import Heatmap     from '../components/Heatmap'
+import XPHeader      from '../components/XPHeader'
+import QuestRow      from '../components/QuestRow'
+import AddQuestBar   from '../components/AddQuestBar'
+import EpicQuestCard from '../components/EpicQuestCard'
+import Heatmap       from '../components/Heatmap'
 import {
   persistence, todayISO, seedActivityIfEmpty,
   getDefaultPolarity, getTaskXpDelta, getTaskFocusDelta,
@@ -34,11 +35,17 @@ export default function Dashboard() {
     return count
   })()
 
-  function addTask({ text, category, priority, polarity }) {
+  function addTask({ text, category, priority, polarity, isEpic = false, dueDate = null, createdDate = null }) {
     const id = _nextId++
-    // Ha a polarity nincs megadva, auto-detektálás
     const resolvedPolarity = polarity ?? getDefaultPolarity(category)
-    setTasks(prev => [{ id, text, category, priority, polarity: resolvedPolarity, completed: false }, ...prev])
+    setTasks(prev => [{
+      id, text, category, priority,
+      polarity: resolvedPolarity,
+      completed: false,
+      isEpic,
+      dueDate:     isEpic ? dueDate    : null,
+      createdDate: isEpic ? createdDate : null,
+    }, ...prev])
   }
 
   function toggleTask(id) {
@@ -97,8 +104,9 @@ export default function Dashboard() {
     })
   }
 
-  const completed = tasks.filter(t =>  t.completed)
-  const pending   = tasks.filter(t => !t.completed)
+  const epicPending    = tasks.filter(t =>  t.isEpic && !t.completed)
+  const regularPending = tasks.filter(t => !t.isEpic && !t.completed)
+  const allCompleted   = tasks.filter(t =>  t.completed)
 
   return (
     <div className="w-full bg-[#0a0a0f]">
@@ -107,7 +115,7 @@ export default function Dashboard() {
       <XPHeader
         totalXp={totalXp}
         focusMin={focusMin}
-        completedCount={completed.length}
+        completedCount={allCompleted.length}
         totalCount={tasks.length}
         streak={streak}
       />
@@ -115,8 +123,43 @@ export default function Dashboard() {
       {/* 2. Quest hozzáadó sáv — jobbkezes hüvelyk-zónában */}
       <AddQuestBar onAdd={addTask} />
 
-      {/* 3. Napi quest lista */}
-      <section className="px-4 pt-3 pb-2" aria-label="Daily Quests">
+      {/* 3. Epic Quests — pinned, a rendes lista felett ──────────────────── */}
+      <AnimatePresence>
+        {epicPending.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25 }}
+            className="px-4 pt-3 pb-1 overflow-hidden"
+            aria-label="Epic Quests"
+          >
+            {/* Section divider */}
+            <div className="flex items-center gap-2 mb-2.5">
+              <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, #f59e0b40, transparent)' }} />
+              <span className="text-[8px] font-black uppercase tracking-[0.15em] text-amber-500/55">
+                ⚡ Epic Quests
+              </span>
+              <div className="flex-1 h-px" style={{ background: 'linear-gradient(270deg, #f59e0b40, transparent)' }} />
+            </div>
+
+            <AnimatePresence mode="popLayout">
+              {epicPending.map(task => (
+                <EpicQuestCard
+                  key={task.id}
+                  task={task}
+                  onToggle={() => toggleTask(task.id)}
+                  onDelete={() => deleteTask(task.id)}
+                  onPolarityChange={p => overridePolarity(task.id, p)}
+                />
+              ))}
+            </AnimatePresence>
+          </motion.section>
+        )}
+      </AnimatePresence>
+
+      {/* 4. Daily quest lista — min-h-[50vh] garantálja a görgethetőséget ── */}
+      <section className="px-4 pt-3 pb-2 min-h-[50vh]" aria-label="Daily Quests">
         {tasks.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <div className="text-4xl mb-3 opacity-40">⚡</div>
@@ -127,8 +170,14 @@ export default function Dashboard() {
           </div>
         )}
 
+        {regularPending.length === 0 && epicPending.length > 0 && (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <p className="text-white/18 text-[12px]">No daily quests — only epics active.</p>
+          </div>
+        )}
+
         <AnimatePresence mode="popLayout">
-          {pending.map((task, i) => (
+          {regularPending.map((task, i) => (
             <div key={task.id} className="mb-2">
               <QuestRow
                 task={task}
@@ -141,9 +190,9 @@ export default function Dashboard() {
           ))}
         </AnimatePresence>
 
-        {completed.length > 0 && (
+        {allCompleted.length > 0 && (
           <CompletedSection
-            tasks={completed}
+            tasks={allCompleted}
             onToggle={toggleTask}
             onDelete={deleteTask}
             onPolarityChange={overridePolarity}
@@ -151,8 +200,8 @@ export default function Dashboard() {
         )}
       </section>
 
-      {/* 4. Heatmap — alul, kényelmesen görgethetően */}
-      <div className="border-t border-white/5 mt-2 pb-8">
+      {/* 5. Heatmap — alul, bőséges pb a fixed nav miatt */}
+      <div className="border-t border-white/5 mt-2 pb-32">
         <Heatmap activity={activity} />
       </div>
     </div>
