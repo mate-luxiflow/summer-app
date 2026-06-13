@@ -1,7 +1,10 @@
-export const XP_PER_TASK   = 20
-export const XP_PER_LEVEL  = 100
-export const FOCUS_CURRENCY_KEY = 'sg_focus_minutes'
+// ── Constants ─────────────────────────────────────────────────────────────────
+export const XP_PER_TASK          = 20
+export const XP_PER_LEVEL         = 100
+export const FOCUS_CURRENCY_KEY   = 'sg_focus_minutes'
+export const STORE_MINUTES_PER_TASK = 10 // focus perc pozitív taskonként
 
+// ── Rank table ────────────────────────────────────────────────────────────────
 export const RANKS = [
   { minLevel: 1,  label: 'Summer Novice',      color: '#94a3b8' },
   { minLevel: 4,  label: 'Consistency King',   color: '#f97316' },
@@ -10,17 +13,17 @@ export const RANKS = [
   { minLevel: 30, label: 'Summer Legend',      color: '#06b6d4' },
 ]
 
-// 8 premium presets + 'grind' as the custom/fallback category
+// ── Category registry ─────────────────────────────────────────────────────────
 export const CATEGORIES = {
-  social:        { label: 'Social',                accent: '#ec4899', icon: '💬' },
-  games:         { label: 'Games',                 accent: '#06b6d4', icon: '🚀' },
-  entertainment: { label: 'Entertainment',         accent: '#ef4444', icon: '🍿' },
-  creativity:    { label: 'Creativity',            accent: '#eab308', icon: '🎨' },
-  education:     { label: 'Education',             accent: '#22c55e', icon: '🌍' },
-  health:        { label: 'Health & Fitness',      accent: '#10b981', icon: '🚲' },
-  reading:       { label: 'Info & Reading',        accent: '#6366f1', icon: '📚' },
-  productivity:  { label: 'Productivity',          accent: '#f59e0b', icon: '💸' },
-  grind:         { label: 'Grind',                 accent: '#a78bfa', icon: '⚡' },
+  social:        { label: 'Social',           accent: '#ec4899', icon: '💬' },
+  games:         { label: 'Games',            accent: '#06b6d4', icon: '🚀' },
+  entertainment: { label: 'Entertainment',    accent: '#ef4444', icon: '🍿' },
+  creativity:    { label: 'Creativity',       accent: '#eab308', icon: '🎨' },
+  education:     { label: 'Education',        accent: '#22c55e', icon: '🌍' },
+  health:        { label: 'Health & Fitness', accent: '#10b981', icon: '🚲' },
+  reading:       { label: 'Info & Reading',   accent: '#6366f1', icon: '📚' },
+  productivity:  { label: 'Productivity',     accent: '#f59e0b', icon: '💸' },
+  grind:         { label: 'Grind',            accent: '#a78bfa', icon: '⚡' },
 }
 
 export const PRIORITY = {
@@ -29,6 +32,187 @@ export const PRIORITY = {
   low:    { label: 'B', color: '#475569' },
 }
 
+// ── Polarity engine ───────────────────────────────────────────────────────────
+export const POLARITY = {
+  positive: { label: 'Positive', color: '#22c55e', symbol: '+', bg: '#22c55e18' },
+  neutral:  { label: 'Neutral',  color: '#64748b', symbol: '○', bg: '#64748b18' },
+  negative: { label: 'Negative', color: '#ef4444', symbol: '−', bg: '#ef444418' },
+}
+
+// Kategória → alapértelmezett polaritás leképezés
+const NEGATIVE_CATS = new Set(['social', 'games', 'entertainment'])
+const POSITIVE_CATS = new Set(['education', 'health', 'reading', 'productivity'])
+
+export function getDefaultPolarity(categoryKey) {
+  if (NEGATIVE_CATS.has(categoryKey)) return 'negative'
+  if (POSITIVE_CATS.has(categoryKey)) return 'positive'
+  return 'neutral'
+}
+
+const POLARITY_CYCLE = ['positive', 'neutral', 'negative']
+export function cyclePolarity(current) {
+  const idx = POLARITY_CYCLE.indexOf(current ?? 'neutral')
+  return POLARITY_CYCLE[(idx + 1) % POLARITY_CYCLE.length]
+}
+
+/** XP delta a task bejelölésekor (csak pozitív kap XP-t) */
+export function getTaskXpDelta(polarity = 'neutral') {
+  return polarity === 'positive' ? XP_PER_TASK : 0
+}
+
+/** Focus-perc delta (negatív fizet, pozitív kap, semleges nulla) */
+export function getTaskFocusDelta(polarity = 'neutral') {
+  if (polarity === 'positive') return STORE_MINUTES_PER_TASK
+  if (polarity === 'negative') return -STORE_MINUTES_PER_TASK
+  return 0
+}
+
+// ── Időmatematika ─────────────────────────────────────────────────────────────
+/** "HH:MM" → éjfél óta eltelt percek */
+export function timeToMinutes(t) {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+/** Percek → "HH:MM" (23:59-nél clampolva, ha átlép éjfélen) */
+export function minutesToTime(mins) {
+  const safe = Math.min(Math.max(mins, 0), 23 * 60 + 59)
+  return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`
+}
+
+export function addMinutesToTime(t, delta) {
+  return minutesToTime(timeToMinutes(t) + delta)
+}
+
+/** Blokk hossza percben */
+export function blockDuration(startTime, endTime) {
+  return Math.max(0, timeToMinutes(endTime) - timeToMinutes(startTime))
+}
+
+/**
+ * Idő-Kaszkád Láncreakció:
+ * 1. targetId blokk endTime-ját megnöveli deltaMinutes-szal
+ * 2. Az összes UTÁNA következő blokk start+end időpontját eltol
+ * Tisztán funkcionális — az eredeti tömböt nem módosítja.
+ */
+export function cascadeShift(blocks, targetId, deltaMinutes) {
+  let cascading = false
+  return blocks.map(block => {
+    if (block.id === targetId) {
+      cascading = true
+      return { ...block, endTime: addMinutesToTime(block.endTime, deltaMinutes) }
+    }
+    if (cascading) {
+      return {
+        ...block,
+        startTime: addMinutesToTime(block.startTime, deltaMinutes),
+        endTime:   addMinutesToTime(block.endTime,   deltaMinutes),
+      }
+    }
+    return block
+  })
+}
+
+/** Várható befejezési idő = utolsó blokk endTime */
+export function getEstimatedFinish(blocks) {
+  return blocks.length ? blocks[blocks.length - 1].endTime : null
+}
+
+/** True ha a kaszkád miatt az idő 23:59-et meghaladná */
+export function wouldExceedMidnight(blocks, targetId, deltaMinutes) {
+  const shifted = cascadeShift(blocks, targetId, deltaMinutes)
+  const lastEnd = getEstimatedFinish(shifted)
+  if (!lastEnd) return false
+  return timeToMinutes(lastEnd) >= 23 * 60 + 59
+}
+
+// ── Nap-segédletek ────────────────────────────────────────────────────────────
+const DAY_NAMES = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday']
+
+export function getTodayDayName() { return DAY_NAMES[new Date().getDay()] }
+export function getWeekdayLabel(day) { return day.charAt(0).toUpperCase() + day.slice(1) }
+
+/** Legutóbbi dayName nevű nap ISO dátuma (ma kivételével) */
+export function getLastOccurrenceISO(dayName) {
+  const target = DAY_NAMES.indexOf(dayName)
+  const d = new Date()
+  d.setDate(d.getDate() - 1) // tegnaptól visszafelé keresünk
+  for (let i = 0; i < 7; i++) {
+    if (d.getDay() === target) return d.toISOString().slice(0, 10)
+    d.setDate(d.getDate() - 1)
+  }
+  return null
+}
+
+/** Aktuális idő "HH:MM" formátumban */
+export function getCurrentTimeHHMM() {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+}
+
+// ── Alapértelmezett heti rutinok ──────────────────────────────────────────────
+function mb(id, name, category, start, end) {
+  return { id, name, category, polarity: getDefaultPolarity(category), startTime: start, endTime: end, completed: false }
+}
+
+export const DEFAULT_WEEKLY_ROUTINES = {
+  monday: [
+    mb('m1', 'Morning Workout',   'health',       '06:30', '07:30'),
+    mb('m2', 'Deep Work Block',   'productivity', '08:00', '10:00'),
+    mb('m3', 'Read & Study',      'education',    '10:30', '12:00'),
+    mb('m4', 'Lunch Break',       'grind',        '12:00', '13:00'),
+    mb('m5', 'Coding Session',    'productivity', '13:30', '16:30'),
+    mb('m6', 'Evening Review',    'reading',      '20:00', '21:00'),
+  ],
+  tuesday: [
+    mb('t1', 'Morning Run',       'health',       '07:00', '08:00'),
+    mb('t2', 'Study Session',     'education',    '08:30', '11:00'),
+    mb('t3', 'Creative Block',    'creativity',   '11:30', '13:00'),
+    mb('t4', 'Lunch & Rest',      'grind',        '13:00', '14:00'),
+    mb('t5', 'Project Work',      'productivity', '14:30', '17:00'),
+    mb('t6', 'Evening Reading',   'reading',      '20:00', '21:30'),
+  ],
+  wednesday: [
+    mb('w1', 'Workout',           'health',       '06:30', '07:30'),
+    mb('w2', 'Deep Focus',        'productivity', '08:00', '10:30'),
+    mb('w3', 'Learning Block',    'education',    '11:00', '13:00'),
+    mb('w4', 'Lunch',             'grind',        '13:00', '14:00'),
+    mb('w5', 'Skill Building',    'creativity',   '14:30', '17:00'),
+    mb('w6', 'Night Study',       'reading',      '20:00', '21:00'),
+  ],
+  thursday: [
+    mb('th1', 'Morning Run',      'health',       '07:00', '08:00'),
+    mb('th2', 'Deep Work',        'productivity', '08:30', '11:00'),
+    mb('th3', 'Reading Block',    'reading',      '11:30', '13:00'),
+    mb('th4', 'Lunch',            'grind',        '13:00', '14:00'),
+    mb('th5', 'Project Time',     'productivity', '14:30', '17:30'),
+    mb('th6', 'Gaming Wind-Down', 'games',        '21:00', '22:00'),
+  ],
+  friday: [
+    mb('f1', 'Workout',           'health',       '07:00', '08:00'),
+    mb('f2', 'Morning Focus',     'productivity', '09:00', '11:00'),
+    mb('f3', 'Learning',          'education',    '11:30', '13:00'),
+    mb('f4', 'Lunch',             'grind',        '13:00', '14:00'),
+    mb('f5', 'Creative Work',     'creativity',   '14:30', '16:30'),
+    mb('f6', 'Social Night',      'social',       '19:00', '21:00'),
+  ],
+  saturday: [
+    mb('s1', 'Long Run',          'health',       '08:00', '09:30'),
+    mb('s2', 'Deep Learning',     'education',    '10:00', '12:00'),
+    mb('s3', 'Lunch & Break',     'grind',        '12:00', '13:30'),
+    mb('s4', 'Creative Session',  'creativity',   '14:00', '17:00'),
+    mb('s5', 'Gaming Block',      'games',        '20:00', '22:00'),
+  ],
+  sunday: [
+    mb('su1', 'Morning Walk',     'health',       '09:00', '10:00'),
+    mb('su2', 'Reading',          'reading',      '10:30', '12:30'),
+    mb('su3', 'Lunch',            'grind',        '12:30', '13:30'),
+    mb('su4', 'Week Planning',    'productivity', '15:00', '16:30'),
+    mb('su5', 'Entertainment',    'entertainment','20:00', '22:00'),
+  ],
+}
+
+// ── Rang & szint ──────────────────────────────────────────────────────────────
 export function getRankInfo(level) {
   let rank = RANKS[0]
   for (const r of RANKS) { if (level >= r.minLevel) rank = r }
@@ -38,40 +222,40 @@ export function getRankInfo(level) {
 export function getLevelInfo(totalXp) {
   const level       = Math.floor(totalXp / XP_PER_LEVEL) + 1
   const xpIntoLevel = totalXp % XP_PER_LEVEL
-  const pct         = Math.round((xpIntoLevel / XP_PER_LEVEL) * 100)
-  return { level, xpIntoLevel, pct }
+  return { level, xpIntoLevel, pct: Math.round((xpIntoLevel / XP_PER_LEVEL) * 100) }
 }
 
-// ── Persistence helpers ──────────────────────────────────────────────────────
-
+// ── Perzisztencia ─────────────────────────────────────────────────────────────
 function load(key, fallback) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback }
   catch { return fallback }
 }
 
 export const persistence = {
-  getTasks:    () => load('sg_tasks', []),
-  setTasks:    (v) => localStorage.setItem('sg_tasks', JSON.stringify(v)),
-  getXp:       () => { const n = Number(localStorage.getItem('sg_xp')); return isFinite(n) ? n : 0 },
-  setXp:       (v) => localStorage.setItem('sg_xp', String(v)),
-  getActivity: () => load('sg_activity', {}),
-  setActivity: (v) => localStorage.setItem('sg_activity', JSON.stringify(v)),
-  getFocusMin: () => { const n = Number(localStorage.getItem(FOCUS_CURRENCY_KEY)); return isFinite(n) ? n : 0 },
-  setFocusMin: (v) => localStorage.setItem(FOCUS_CURRENCY_KEY, String(v)),
+  getTasks:          () => load('sg_tasks', []),
+  setTasks:          v  => localStorage.setItem('sg_tasks', JSON.stringify(v)),
+  getXp:             () => { const n = Number(localStorage.getItem('sg_xp')); return isFinite(n) ? n : 0 },
+  setXp:             v  => localStorage.setItem('sg_xp', String(v)),
+  getActivity:       () => load('sg_activity', {}),
+  setActivity:       v  => localStorage.setItem('sg_activity', JSON.stringify(v)),
+  // Focus percek soha nem mehetnek 0 alá — a setFocusMin gondoskodik róla
+  getFocusMin:       () => { const n = Number(localStorage.getItem(FOCUS_CURRENCY_KEY)); return isFinite(n) ? n : 0 },
+  setFocusMin:       v  => localStorage.setItem(FOCUS_CURRENCY_KEY, String(Math.max(0, Math.round(v)))),
+  // Napi rutin blokkok
+  getRoutine:        iso => load(`sg_routine_${iso}`, null),
+  setRoutine:        (iso, v) => localStorage.setItem(`sg_routine_${iso}`, JSON.stringify(v)),
+  // Alap-befejezési idő per nap (a kaszkád-delay számításhoz)
+  getBaselineFinish: iso => localStorage.getItem(`sg_baseline_${iso}`) ?? null,
+  setBaselineFinish: (iso, t) => t && localStorage.setItem(`sg_baseline_${iso}`, t),
 }
 
-// ── Date helpers ─────────────────────────────────────────────────────────────
-
-export function todayISO() {
-  return new Date().toISOString().slice(0, 10)
-}
+// ── Dátum-segédletek ──────────────────────────────────────────────────────────
+export function todayISO() { return new Date().toISOString().slice(0, 10) }
 
 export function lastNDays(n) {
-  const days = []
-  const now  = new Date()
+  const days = []; const now = new Date()
   for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(now)
-    d.setDate(now.getDate() - i)
+    const d = new Date(now); d.setDate(now.getDate() - i)
     days.push(d.toISOString().slice(0, 10))
   }
   return days
@@ -80,9 +264,8 @@ export function lastNDays(n) {
 export function seedActivityIfEmpty() {
   const existing = persistence.getActivity()
   if (Object.keys(existing).length > 5) return
-  const days   = lastNDays(180)
   const seeded = {}
-  for (const d of days) {
+  for (const d of lastNDays(180)) {
     if (Math.random() > 0.4) seeded[d] = Math.floor(Math.random() * 180) + 10
   }
   persistence.setActivity(seeded)

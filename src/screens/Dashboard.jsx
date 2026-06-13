@@ -5,7 +5,8 @@ import QuestRow    from '../components/QuestRow'
 import AddQuestBar from '../components/AddQuestBar'
 import Heatmap     from '../components/Heatmap'
 import {
-  persistence, todayISO, XP_PER_TASK, seedActivityIfEmpty,
+  persistence, todayISO, seedActivityIfEmpty,
+  getDefaultPolarity, getTaskXpDelta, getTaskFocusDelta,
 } from '../store'
 
 seedActivityIfEmpty()
@@ -15,46 +16,83 @@ let _nextId = Math.max(0, ...persistence.getTasks().map(t => t.id ?? 0)) + 1
 export default function Dashboard() {
   const [tasks,    setTasks]    = useState(persistence.getTasks)
   const [totalXp,  setTotalXp]  = useState(persistence.getXp)
+  const [focusMin, setFocusMin] = useState(persistence.getFocusMin)
   const [activity, setActivity] = useState(persistence.getActivity)
 
-  useEffect(() => { persistence.setTasks(tasks) },       [tasks])
-  useEffect(() => { persistence.setXp(totalXp) },        [totalXp])
+  useEffect(() => { persistence.setTasks(tasks) },    [tasks])
+  useEffect(() => { persistence.setXp(totalXp) },     [totalXp])
+  useEffect(() => { persistence.setFocusMin(focusMin) }, [focusMin])
   useEffect(() => { persistence.setActivity(activity) }, [activity])
 
-  // Consecutive-day streak
+  // Egymást követő napos streak
   const streak = (() => {
-    let count = 0
-    const d = new Date()
+    let count = 0; const d = new Date()
     for (let i = 0; i < 365; i++) {
       const iso = d.toISOString().slice(0, 10)
-      if (activity[iso]) { count++; d.setDate(d.getDate() - 1) }
-      else break
+      if (activity[iso]) { count++; d.setDate(d.getDate() - 1) } else break
     }
     return count
   })()
 
-  function addTask({ text, category, priority }) {
+  function addTask({ text, category, priority, polarity }) {
     const id = _nextId++
-    setTasks(prev => [{ id, text, category, priority, completed: false }, ...prev])
+    // Ha a polarity nincs megadva, auto-detektálás
+    const resolvedPolarity = polarity ?? getDefaultPolarity(category)
+    setTasks(prev => [{ id, text, category, priority, polarity: resolvedPolarity, completed: false }, ...prev])
   }
 
   function toggleTask(id) {
     setTasks(prev => prev.map(t => {
       if (t.id !== id) return t
-      const nowDone = !t.completed
-      setTotalXp(xp => Math.max(0, xp + (nowDone ? XP_PER_TASK : -XP_PER_TASK)))
+      const polarity = t.polarity ?? 'neutral'
+      const nowDone  = !t.completed
+      const xpDelta    = getTaskXpDelta(polarity)
+      const focusDelta = getTaskFocusDelta(polarity)
+
       if (nowDone) {
+        setTotalXp(xp  => Math.max(0, xp + xpDelta))
+        setFocusMin(f  => Math.max(0, f + focusDelta))
         const today = todayISO()
         setActivity(act => ({ ...act, [today]: (act[today] ?? 0) + 5 }))
+      } else {
+        // Visszavonás: az eredeti XP/focus visszafordul
+        setTotalXp(xp  => Math.max(0, xp - xpDelta))
+        setFocusMin(f  => Math.max(0, f - focusDelta))
       }
       return { ...t, completed: nowDone }
+    }))
+  }
+
+  /**
+   * Inline polarity override — ha a task már kész, az XP/focus értékeket
+   * azonnal újraszámolja (régi polaritás visszafordul, új hozzáadódik).
+   */
+  function overridePolarity(id, newPolarity) {
+    setTasks(prev => prev.map(t => {
+      if (t.id !== id) return t
+      const oldPolarity = t.polarity ?? 'neutral'
+      if (oldPolarity === newPolarity) return t
+
+      if (t.completed) {
+        const oldXp    = getTaskXpDelta(oldPolarity)
+        const newXp    = getTaskXpDelta(newPolarity)
+        setTotalXp(xp  => Math.max(0, xp - oldXp + newXp))
+
+        const oldFocus = getTaskFocusDelta(oldPolarity)
+        const newFocus = getTaskFocusDelta(newPolarity)
+        setFocusMin(f  => Math.max(0, f - oldFocus + newFocus))
+      }
+      return { ...t, polarity: newPolarity }
     }))
   }
 
   function deleteTask(id) {
     setTasks(prev => {
       const task = prev.find(t => t.id === id)
-      if (task?.completed) setTotalXp(xp => Math.max(0, xp - XP_PER_TASK))
+      if (task?.completed) {
+        setTotalXp(xp  => Math.max(0, xp - getTaskXpDelta(task.polarity ?? 'neutral')))
+        setFocusMin(f  => Math.max(0, f  - getTaskFocusDelta(task.polarity ?? 'neutral')))
+      }
       return prev.filter(t => t.id !== id)
     })
   }
@@ -63,21 +101,21 @@ export default function Dashboard() {
   const pending   = tasks.filter(t => !t.completed)
 
   return (
-    // Free-flowing container — no height lock, scrolls with the page
     <div className="w-full bg-[#0a0a0f]">
 
-      {/* 1. XP Header */}
+      {/* 1. XP fejléc */}
       <XPHeader
         totalXp={totalXp}
+        focusMin={focusMin}
         completedCount={completed.length}
         totalCount={tasks.length}
         streak={streak}
       />
 
-      {/* 2. Add Quest Bar — immediately below the header, above the list */}
+      {/* 2. Quest hozzáadó sáv — jobbkezes hüvelyk-zónában */}
       <AddQuestBar onAdd={addTask} />
 
-      {/* 3. Daily Quests */}
+      {/* 3. Napi quest lista */}
       <section className="px-4 pt-3 pb-2" aria-label="Daily Quests">
         {tasks.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -97,17 +135,23 @@ export default function Dashboard() {
                 index={i}
                 onToggle={() => toggleTask(task.id)}
                 onDelete={() => deleteTask(task.id)}
+                onPolarityChange={p => overridePolarity(task.id, p)}
               />
             </div>
           ))}
         </AnimatePresence>
 
         {completed.length > 0 && (
-          <CompletedSection tasks={completed} onToggle={toggleTask} onDelete={deleteTask} />
+          <CompletedSection
+            tasks={completed}
+            onToggle={toggleTask}
+            onDelete={deleteTask}
+            onPolarityChange={overridePolarity}
+          />
         )}
       </section>
 
-      {/* 4. Lock-In Activity Heatmap — at the bottom, comfortably scrollable */}
+      {/* 4. Heatmap — alul, kényelmesen görgethetően */}
       <div className="border-t border-white/5 mt-2 pb-8">
         <Heatmap activity={activity} />
       </div>
@@ -115,8 +159,8 @@ export default function Dashboard() {
   )
 }
 
-// ── Completed section ────────────────────────────────────────────────────────
-function CompletedSection({ tasks, onToggle, onDelete }) {
+// ── Teljesített szekció ────────────────────────────────────────────────────────
+function CompletedSection({ tasks, onToggle, onDelete, onPolarityChange }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -153,6 +197,7 @@ function CompletedSection({ tasks, onToggle, onDelete }) {
                     index={i}
                     onToggle={() => onToggle(task.id)}
                     onDelete={() => onDelete(task.id)}
+                    onPolarityChange={p => onPolarityChange(task.id, p)}
                   />
                 </div>
               ))}
