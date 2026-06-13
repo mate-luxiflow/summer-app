@@ -1,229 +1,118 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import Dashboard from './screens/Dashboard'
 
-const CARD_COLORS = [
-  'from-orange-500 to-pink-500',
-  'from-violet-500 to-indigo-500',
-  'from-cyan-500 to-blue-500',
-  'from-emerald-500 to-teal-500',
-  'from-rose-500 to-orange-500',
-  'from-fuchsia-500 to-violet-500',
-]
-
-const INITIAL_TASKS = [
-  { id: 1, text: 'Morning workout', completed: true,  color: CARD_COLORS[0] },
-  { id: 2, text: 'Read 30 pages',   completed: false, color: CARD_COLORS[1] },
-  { id: 3, text: 'Cold shower',     completed: false, color: CARD_COLORS[2] },
-]
-
-const XP_PER_TASK  = 15
-const XP_PER_LEVEL = 100
-
-function getRank(level) {
-  if (level <= 3)  return 'Summer Novice'
-  if (level <= 7)  return 'Consistency King'
-  if (level <= 15) return 'Productive Grinder'
-  return 'Summer Legend'
-}
-
-function getLevelInfo(totalXp) {
-  const level      = Math.floor(totalXp / XP_PER_LEVEL) + 1
-  const xpIntoLevel = totalXp % XP_PER_LEVEL
-  const xpProgress  = Math.round((xpIntoLevel / XP_PER_LEVEL) * 100)
-  return { level, xpIntoLevel, xpProgress }
-}
-
-function TaskCard({ task, onToggle }) {
+// Placeholder screens for tabs not yet implemented
+function ComingSoon({ label }) {
   return (
-    <div
-      className="flex items-center gap-4 rounded-2xl border border-gray-800 bg-gray-800/60 backdrop-blur-sm p-4 active:scale-[0.98] transition-transform cursor-pointer select-none"
-      onClick={onToggle}
-    >
-      <div
-        className={`shrink-0 w-14 h-14 rounded-full border-2 flex items-center justify-center transition-all duration-300
-          ${task.completed
-            ? `bg-gradient-to-br ${task.color} border-transparent shadow-lg`
-            : 'border-gray-600 bg-gray-900'
-          }`}
-      >
-        {task.completed && (
-          <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-          </svg>
-        )}
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <p className={`font-semibold text-base leading-tight truncate transition-colors duration-300 ${task.completed ? 'line-through text-gray-500' : 'text-white'}`}>
-          {task.text}
-        </p>
-        <p className="text-gray-500 text-xs mt-0.5">{task.completed ? 'Quest complete!' : 'Tap to complete'}</p>
-      </div>
-
-      <div className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-bold bg-gradient-to-r ${task.color} text-white shadow transition-opacity duration-300 ${task.completed ? 'opacity-40' : 'opacity-100'}`}>
-        +{XP_PER_TASK} XP
-      </div>
+    <div className="h-screen w-full bg-[#0a0a0f] flex flex-col items-center justify-center gap-3">
+      <div className="text-3xl opacity-20">🚧</div>
+      <p className="text-white/20 text-[13px] font-semibold uppercase tracking-widest">{label}</p>
+      <p className="text-white/10 text-[11px]">Coming soon</p>
     </div>
   )
 }
 
-function loadTasks() {
-  try {
-    const saved = localStorage.getItem('sg_tasks')
-    return saved ? JSON.parse(saved) : []
-  } catch {
-    return []
-  }
-}
-
-function loadXp() {
-  const saved = localStorage.getItem('sg_xp')
-  const parsed = Number(saved)
-  return Number.isFinite(parsed) ? parsed : 0
-}
-
-let nextId = Math.max(0, ...loadTasks().map(t => t.id)) + 1
+const TABS = [
+  {
+    key: 'dashboard',
+    icon: (active) => (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={active ? 2.5 : 1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>
+    ),
+    label: 'Grind',
+  },
+  {
+    key: 'stats',
+    icon: (active) => (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={active ? 2.5 : 1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </svg>
+    ),
+    label: 'Stats',
+  },
+  {
+    key: 'store',
+    icon: (active) => (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={active ? 2.5 : 1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+    label: 'Store',
+  },
+  {
+    key: 'settings',
+    icon: (active) => (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={active ? 2.5 : 1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    ),
+    label: 'Settings',
+  },
+]
 
 export default function App() {
-  const [tasks, setTasks] = useState(loadTasks)
-  const [totalXp, setTotalXp] = useState(loadXp)
-  const [input, setInput]  = useState('')
-  const inputRef           = useRef(null)
-
-  useEffect(() => { localStorage.setItem('sg_tasks', JSON.stringify(tasks)) }, [tasks])
-  useEffect(() => { localStorage.setItem('sg_xp',    String(totalXp))       }, [totalXp])
-
-  const { level, xpIntoLevel, xpProgress } = getLevelInfo(totalXp)
-  const rank = getRank(level)
-
-  const completedCount = tasks.filter(t => t.completed).length
-  const taskProgress   = tasks.length === 0 ? 0 : Math.round((completedCount / tasks.length) * 100)
-
-  function addTask() {
-    const text = input.trim()
-    if (!text) return
-    const color = CARD_COLORS[nextId % CARD_COLORS.length]
-    setTasks(prev => [{ id: nextId++, text, completed: false, color }, ...prev])
-    setInput('')
-    inputRef.current?.focus()
-  }
-
-  function toggleTask(id) {
-    setTasks(prev => prev.map(t => {
-      if (t.id !== id) return t
-      const nowDone = !t.completed
-      setTotalXp(xp => Math.max(0, xp + (nowDone ? XP_PER_TASK : -XP_PER_TASK)))
-      return { ...t, completed: nowDone }
-    }))
-  }
-
-  function handleKeyDown(e) {
-    if (e.key === 'Enter') addTask()
-  }
+  const [activeTab, setActiveTab] = useState('dashboard')
 
   return (
-    <div className="h-screen w-full overflow-hidden flex flex-col bg-gray-900 text-white">
-
-      {/* ── HEADER ── */}
-      <header className="shrink-0 px-5 pt-12 pb-5 border-b border-gray-800 bg-gray-900/80 backdrop-blur-md">
-        {/* Title row */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-orange-400 via-pink-400 to-violet-400 bg-clip-text text-transparent">
-              Summer Grind
-            </h1>
-            <p className="text-gray-400 text-sm mt-0.5">Today · Jun 11</p>
-          </div>
-          {/* Level badge */}
-          <div className="flex flex-col items-center justify-center w-14 h-14 rounded-2xl border border-gray-700 bg-gray-800 shadow-lg">
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider leading-none">LVL</span>
-            <span className="text-2xl font-extrabold bg-linear-to-b from-orange-300 to-pink-400 bg-clip-text text-transparent leading-tight">
-              {level}
-            </span>
-          </div>
-        </div>
-
-        {/* Rank label + total XP */}
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-xs font-bold text-pink-400 uppercase tracking-widest">{rank}</span>
-          <span className="text-xs font-semibold text-gray-400">{totalXp} XP total</span>
-        </div>
-
-        {/* XP-to-next-level bar */}
-        <div className="h-2.5 w-full rounded-full bg-gray-800 overflow-hidden mb-1">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-orange-400 via-pink-400 to-violet-500 transition-all duration-500"
-            style={{
-              width: `${xpProgress}%`,
-              boxShadow: xpProgress > 0 ? '0 0 12px 2px rgba(251,146,60,0.7), 0 0 4px 1px rgba(236,72,153,0.5)' : 'none',
-            }}
-          />
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] text-gray-600">Level {level}</span>
-          <span className="text-[10px] text-gray-500">{xpIntoLevel} / {XP_PER_LEVEL} XP</span>
-          <span className="text-[10px] text-gray-600">Level {level + 1}</span>
-        </div>
-
-        {/* Divider */}
-        <div className="mt-4 mb-0 border-t border-gray-800" />
-
-        {/* Daily task progress bar */}
-        <div className="mt-3">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Daily Quests</span>
-            <span className="text-xs font-semibold text-gray-400">{completedCount} / {tasks.length} done</span>
-          </div>
-          <div className="h-1.5 w-full rounded-full bg-gray-800 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-linear-to-r from-emerald-400 to-cyan-400 transition-all duration-500"
-              style={{ width: `${taskProgress}%` }}
-            />
-          </div>
-        </div>
-      </header>
-
-      {/* ── TASK LIST ── */}
-      <main className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-        {tasks.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <p className="text-4xl mb-3">🌞</p>
-            <p className="text-gray-400 text-sm">No quests yet.<br />Add one below to start your grind.</p>
-          </div>
-        )}
-
-        {tasks.map(task => (
-          <TaskCard key={task.id} task={task} onToggle={() => toggleTask(task.id)} />
-        ))}
-
-        <div className="h-2" />
-      </main>
-
-      {/* ── BOTTOM BAR ── */}
-      <div className="shrink-0 px-4 pb-8 pt-3 border-t border-gray-800 bg-gray-900/90 backdrop-blur-md">
-        <div className="flex gap-3 items-center">
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Add a new quest…"
-            className="flex-1 rounded-2xl border border-gray-700 bg-gray-800 px-4 py-3 text-sm text-white placeholder-gray-500 outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500/40 transition"
-          />
-          <button
-            onClick={addTask}
-            disabled={!input.trim()}
-            className="shrink-0 rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-lg active:scale-95 transition-transform disabled:opacity-40"
-            style={{
-              background: 'linear-gradient(135deg, #f97316 0%, #ec4899 50%, #8b5cf6 100%)',
-              boxShadow: input.trim() ? '0 4px 20px rgba(236,72,153,0.4)' : 'none',
-            }}
+    <div className="relative h-screen w-full overflow-hidden bg-[#0a0a0f]">
+      {/* Screen content */}
+      <div className="absolute inset-0 bottom-[60px]">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="h-full"
           >
-            Add
-          </button>
-        </div>
+            {activeTab === 'dashboard' && <Dashboard />}
+            {activeTab === 'stats'     && <ComingSoon label="Analytics" />}
+            {activeTab === 'store'     && <ComingSoon label="Store" />}
+            {activeTab === 'settings'  && <ComingSoon label="Settings" />}
+          </motion.div>
+        </AnimatePresence>
       </div>
 
+      {/* Bottom tab bar */}
+      <nav
+        className="absolute bottom-0 left-0 right-0 h-[60px] flex items-center justify-around border-t border-white/[0.06] bg-[#0a0a0f]/95 backdrop-blur-xl"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        aria-label="Main navigation"
+      >
+        {TABS.map(tab => {
+          const isActive = activeTab === tab.key
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className="flex flex-col items-center gap-0.5 px-4 py-1 transition-all duration-150 relative"
+              aria-label={tab.label}
+              aria-current={isActive ? 'page' : undefined}
+            >
+              {/* Active indicator dot */}
+              {isActive && (
+                <motion.div
+                  layoutId="tab-indicator"
+                  className="absolute -top-px left-1/2 -translate-x-1/2 w-5 h-[2px] rounded-full"
+                  style={{ background: 'linear-gradient(90deg,#f97316,#ec4899)' }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                />
+              )}
+
+              <span className={`transition-colors duration-150 ${isActive ? 'text-white' : 'text-white/25'}`}>
+                {tab.icon(isActive)}
+              </span>
+              <span className={`text-[9px] font-bold uppercase tracking-widest transition-colors duration-150 ${isActive ? 'text-white/70' : 'text-white/15'}`}>
+                {tab.label}
+              </span>
+            </button>
+          )
+        })}
+      </nav>
     </div>
   )
 }
