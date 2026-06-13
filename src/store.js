@@ -1,8 +1,5 @@
-// Central state – plain JS module with localStorage persistence.
-// Keeps all business logic out of React components.
-
-export const XP_PER_TASK = 20
-export const XP_PER_LEVEL = 100
+export const XP_PER_TASK   = 20
+export const XP_PER_LEVEL  = 100
 export const FOCUS_CURRENCY_KEY = 'sg_focus_minutes'
 
 export const RANKS = [
@@ -13,12 +10,17 @@ export const RANKS = [
   { minLevel: 30, label: 'Summer Legend',      color: '#06b6d4' },
 ]
 
+// 8 premium presets + 'grind' as the custom/fallback category
 export const CATEGORIES = {
-  health:    { label: 'Health',    accent: '#22d3ee', icon: '🏃' },
-  learning:  { label: 'Learning',  accent: '#a78bfa', icon: '📚' },
-  deep_work: { label: 'Deep Work', accent: '#f97316', icon: '⚡' },
-  mindset:   { label: 'Mindset',   accent: '#34d399', icon: '🧠' },
-  other:     { label: 'Other',     accent: '#f472b6', icon: '✦'  },
+  social:        { label: 'Social',                accent: '#ec4899', icon: '💬' },
+  games:         { label: 'Games',                 accent: '#06b6d4', icon: '🚀' },
+  entertainment: { label: 'Entertainment',         accent: '#ef4444', icon: '🍿' },
+  creativity:    { label: 'Creativity',            accent: '#eab308', icon: '🎨' },
+  education:     { label: 'Education',             accent: '#22c55e', icon: '🌍' },
+  health:        { label: 'Health & Fitness',      accent: '#10b981', icon: '🚲' },
+  reading:       { label: 'Info & Reading',        accent: '#6366f1', icon: '📚' },
+  productivity:  { label: 'Productivity',          accent: '#f59e0b', icon: '💸' },
+  grind:         { label: 'Grind',                 accent: '#a78bfa', icon: '⚡' },
 }
 
 export const PRIORITY = {
@@ -48,14 +50,14 @@ function load(key, fallback) {
 }
 
 export const persistence = {
-  getTasks:       () => load('sg_tasks', []),
-  setTasks:       (v) => localStorage.setItem('sg_tasks', JSON.stringify(v)),
-  getXp:          () => { const n = Number(localStorage.getItem('sg_xp')); return isFinite(n) ? n : 0 },
-  setXp:          (v) => localStorage.setItem('sg_xp', String(v)),
-  getActivity:    () => load('sg_activity', {}),   // { 'YYYY-MM-DD': focusMinutes }
-  setActivity:    (v) => localStorage.setItem('sg_activity', JSON.stringify(v)),
-  getFocusMin:    () => { const n = Number(localStorage.getItem(FOCUS_CURRENCY_KEY)); return isFinite(n) ? n : 0 },
-  setFocusMin:    (v) => localStorage.setItem(FOCUS_CURRENCY_KEY, String(v)),
+  getTasks:    () => load('sg_tasks', []),
+  setTasks:    (v) => localStorage.setItem('sg_tasks', JSON.stringify(v)),
+  getXp:       () => { const n = Number(localStorage.getItem('sg_xp')); return isFinite(n) ? n : 0 },
+  setXp:       (v) => localStorage.setItem('sg_xp', String(v)),
+  getActivity: () => load('sg_activity', {}),
+  setActivity: (v) => localStorage.setItem('sg_activity', JSON.stringify(v)),
+  getFocusMin: () => { const n = Number(localStorage.getItem(FOCUS_CURRENCY_KEY)); return isFinite(n) ? n : 0 },
+  setFocusMin: (v) => localStorage.setItem(FOCUS_CURRENCY_KEY, String(v)),
 }
 
 // ── Date helpers ─────────────────────────────────────────────────────────────
@@ -64,7 +66,6 @@ export function todayISO() {
   return new Date().toISOString().slice(0, 10)
 }
 
-/** Returns array of ISO date strings for the last N days (oldest → newest). */
 export function lastNDays(n) {
   const days = []
   const now  = new Date()
@@ -76,17 +77,13 @@ export function lastNDays(n) {
   return days
 }
 
-/** Seed realistic fake activity so the heatmap isn't empty on first load. */
 export function seedActivityIfEmpty() {
   const existing = persistence.getActivity()
   if (Object.keys(existing).length > 5) return
-  const days = lastNDays(180)
+  const days   = lastNDays(180)
   const seeded = {}
   for (const d of days) {
-    // ~60 % chance of having activity on any given day
-    if (Math.random() > 0.4) {
-      seeded[d] = Math.floor(Math.random() * 180) + 10
-    }
+    if (Math.random() > 0.4) seeded[d] = Math.floor(Math.random() * 180) + 10
   }
   persistence.setActivity(seeded)
 }

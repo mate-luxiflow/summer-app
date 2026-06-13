@@ -30,7 +30,7 @@ function CompletionBurst() {
 }
 
 export default function QuestRow({ task, onToggle, onDelete, index }) {
-  const cat = CATEGORIES[task.category] ?? CATEGORIES.other
+  const cat = CATEGORIES[task.category] ?? CATEGORIES.grind
   const pri = PRIORITY[task.priority]  ?? PRIORITY.medium
 
   return (
@@ -53,14 +53,14 @@ export default function QuestRow({ task, onToggle, onDelete, index }) {
     >
       {/* Left accent bar */}
       <div
-        className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full transition-opacity duration-300"
+        className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full transition-opacity duration-300"
         style={{ background: cat.accent, opacity: task.completed ? 0.2 : 0.7 }}
       />
 
       {/* Check circle */}
       <div className="relative shrink-0">
         <motion.div
-          className="w-[22px] h-[22px] rounded-full border-2 flex items-center justify-center transition-all duration-200"
+          className="w-5.5 h-5.5 rounded-full border-2 flex items-center justify-center transition-all duration-200"
           style={{
             borderColor: task.completed ? cat.accent : 'rgba(255,255,255,0.18)',
             background:   task.completed ? cat.accent : 'transparent',
@@ -98,7 +98,7 @@ export default function QuestRow({ task, onToggle, onDelete, index }) {
 
       {/* Priority badge */}
       <div
-        className="shrink-0 w-[18px] h-[18px] rounded flex items-center justify-center text-[9px] font-black"
+        className="shrink-0 w-4.5 h-4.5 rounded flex items-center justify-center text-[9px] font-black"
         style={{ background: pri.color + '22', color: pri.color, border: `1px solid ${pri.color}40` }}
         aria-label={`Priority ${task.priority}`}
       >

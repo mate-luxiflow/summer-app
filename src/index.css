@@ -6,9 +6,14 @@
     box-sizing: border-box;
   }
 
-  html, body, #root {
+  html, body {
     height: 100%;
     overscroll-behavior: none;
+  }
+
+  /* #root grows with content — min-height keeps it at least full-screen */
+  #root {
+    min-height: 100%;
   }
 
   body {
@@ -19,7 +24,6 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Hide scrollbars but keep scroll functionality */
   ::-webkit-scrollbar { display: none; }
   * { scrollbar-width: none; }
 }
