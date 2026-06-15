@@ -74,7 +74,7 @@ const QuestRow = memo(function QuestRow({ task, onToggle, onDelete, onPolarityCh
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -24, transition: { duration: 0.2 } }}
       transition={{ delay: index * 0.03, duration: 0.25 }}
-      className="group relative flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors duration-200 select-none cursor-pointer active:scale-[0.985]"
+      className="relative flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors duration-200 select-none cursor-pointer active:scale-[0.985]"
       style={{
         borderColor: task.completed ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.07)',
         background:  task.completed ? 'rgba(255,255,255,0.015)' : 'rgba(255,255,255,0.03)',
@@ -161,14 +161,27 @@ const QuestRow = memo(function QuestRow({ task, onToggle, onDelete, onPolarityCh
         {xpDelta > 0 ? `+${xpDelta}` : '0'} XP
       </div>
 
-      {/* Törlés gomb — hover/fókuszon látható */}
+      {/* ── Törlés gomb — WCAG 2.2 Mobile: 44×44px touch target ──────────────
+           Mobilon mindig látható (nem hover-függő opacity-0).
+           A vizuális ikon kis méretű, de az érintési zóna a teljes 44px. */}
       <button
         onClick={e => { e.stopPropagation(); onDelete() }}
-        className="shrink-0 w-5 h-5 rounded flex items-center justify-center text-white/15 hover:text-red-400 hover:bg-red-400/10 transition-all duration-150 opacity-0 group-hover:opacity-100 focus:opacity-100"
+        className="shrink-0 relative flex items-center justify-center rounded-full transition-colors duration-150"
+        style={{
+          width:       44,
+          height:      44,
+          marginRight: -10,
+          marginTop:   -10,
+          marginBottom:-10,
+          touchAction: 'manipulation',
+        }}
         aria-label="Delete quest"
-        tabIndex={-1}
       >
-        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <svg
+          className="w-3 h-3 transition-opacity duration-150"
+          style={{ color: '#ef4444', opacity: 0.45 }}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+        >
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>

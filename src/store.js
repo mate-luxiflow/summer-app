@@ -247,6 +247,10 @@ export const persistence = {
   // Alap-befejezési idő per nap (a kaszkád-delay számításhoz)
   getBaselineFinish: iso => localStorage.getItem(`sg_baseline_${iso}`) ?? null,
   setBaselineFinish: (iso, t) => t && localStorage.setItem(`sg_baseline_${iso}`, t),
+  // Ismétlődő blokk sablonok: { id, name, category, polarity, startTime, endTime, days: number[] }[]
+  // days: 0=Vasárnap, 1=Hétfő, 2=Kedd, 3=Szerda, 4=Csütörtök, 5=Péntek, 6=Szombat
+  getRecurring:      () => load('sg_recurring', []),
+  setRecurring:      v  => localStorage.setItem('sg_recurring', JSON.stringify(v)),
 }
 
 // ── Dátum-segédletek ──────────────────────────────────────────────────────────
