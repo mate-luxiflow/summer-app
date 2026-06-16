@@ -1,0 +1,31 @@
+# Dependency-k (A külső könyvtárak, amiket az npm telepít - ez a legfontosabb!)
+node_modules/
+jspm_packages/
+web_modules/
+
+# Build / Produkciós mappák (A kész, lefordított kód, amit a Vercel maga generál)
+dist/
+dist-ssr/
+build/
+.vercel/
+
+# Környezeti változók / Titkos fájlok (API kulcsok, jelszavak - SOHA ne keressenek fel!)
+.env
+.env.local
+.env.*.local
+
+# Fejlesztői eszközök és szerkesztők beállításai
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Rendszerfájlok (pl. Mac és Windows felesleges gyorsítótárai)
+.DS_Store
+Thumbs.db
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
