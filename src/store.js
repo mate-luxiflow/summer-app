@@ -265,16 +265,6 @@ export function lastNDays(n) {
   return days
 }
 
-export function seedActivityIfEmpty() {
-  const existing = persistence.getActivity()
-  if (Object.keys(existing).length > 5) return
-  const seeded = {}
-  for (const d of lastNDays(180)) {
-    if (Math.random() > 0.4) seeded[d] = Math.floor(Math.random() * 180) + 10
-  }
-  persistence.setActivity(seeded)
-}
-
 // ── Epic Quest segédletek ─────────────────────────────────────────────────────
 /** Hátralévő napok az Epic Quest határidejéig (negatív = lejárt) */
 export function getEpicDaysRemaining(dueDate) {
