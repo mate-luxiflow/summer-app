@@ -1,20 +1,18 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import {
   persistence, todayISO,
-  getDefaultPolarity, getTaskXpDelta, getTaskFocusDelta,
+  getDefaultPolarity, getTaskFocusDelta, computeDailyXp,
   getTodayDayName, DEFAULT_WEEKLY_ROUTINES,
   cascadeShift, getEstimatedFinish, timeToMinutes, wouldExceedMidnight,
 } from '../store'
 
 const AppContext = createContext(null)
 
-// Constant for the session — JS day index (0=Sun … 6=Sat)
 export const TODAY_IDX = new Date().getDay()
 
-// Module-level id counter so it survives tab switches
 let _nextTaskId = Math.max(0, ...persistence.getTasks().map(t => t.id ?? 0)) + 1
 
-// ── Initial routine block calculation (called once at context mount) ──────────
+// ── Initial routine block calculation ────────────────────────────────────────
 function buildInitialBlocks() {
   const iso       = todayISO()
   const saved     = persistence.getRoutine(iso)
@@ -30,11 +28,8 @@ function buildInitialBlocks() {
       completed:           false,
     }))
 
-  // saved !== null means the key exists — even [] is a valid "empty day" state
   if (saved !== null) {
     const savedIds    = new Set(saved.map(b => b.id))
-    // excludedIds: materialized recurring blocks the user explicitly deleted from today.
-    // Without this, buildInitialBlocks re-injects them on every reload (ghost-data bug).
     const excludedIds = new Set(persistence.getExcludedRecurring(iso))
     const toMerge     = todayRecurring.filter(
       rb => !savedIds.has(rb.id) && !excludedIds.has(rb.id)
@@ -42,7 +37,6 @@ function buildInitialBlocks() {
     return [...saved, ...toMerge].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
   }
 
-  // First-ever run: inject default weekly templates exactly once
   const isFirstRun = localStorage.getItem('sg_initialized') === null
   if (isFirstRun) {
     localStorage.setItem('sg_initialized', '1')
@@ -53,7 +47,6 @@ function buildInitialBlocks() {
     return [...def, ...toMerge].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
   }
 
-  // Returning user, new day — only recurring blocks
   return todayRecurring.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
 }
 
@@ -70,24 +63,58 @@ function buildInitialBaseline() {
 export function AppContextProvider({ children }) {
   const iso = todayISO()
 
-  // Quest state
   const [tasks,    setTasks]    = useState(persistence.getTasks)
   const [totalXp,  setTotalXp]  = useState(persistence.getXp)
   const [focusMin, setFocusMin] = useState(persistence.getFocusMin)
   const [activity, setActivity] = useState(persistence.getActivity)
 
-  // Routine state
   const [blocks,          setBlocks]          = useState(buildInitialBlocks)
   const [recurringBlocks, setRecurringBlocks] = useState(() => persistence.getRecurring())
   const [baselineFinish,  setBaselineFinish]  = useState(buildInitialBaseline)
 
-  // ── Belt-and-suspenders useEffect syncs (covers _setBlocksDirect) ─────────
-  // Primary persistence is synchronous inside each action below.
-  // These are a fallback only — do NOT rely on them for correctness.
+  const [toast, setToast] = useState(null)
+  const dismissToast = useCallback(() => setToast(null), [])
+
+  // ── One-time migration: seed today's daily XP baseline from existing data ──
+  // Prevents double-counting XP on first load after switching to the new system.
+  useEffect(() => {
+    const MIGRATION_KEY = 'sg_xp_v2_migrated'
+    if (localStorage.getItem(MIGRATION_KEY)) return
+    const initialDailyXp = computeDailyXp(persistence.getTasks())
+    persistence.setDailyXp(iso, initialDailyXp)
+    localStorage.setItem(MIGRATION_KEY, '1')
+  }, [iso])
+
+  // ── Retroaktív auto-claim (másnap reggeli biztonsági háló) ─────────────────
+  useEffect(() => {
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const prevISO = yesterday.toISOString().slice(0, 10)
+
+    if (persistence.getAutoClaim(prevISO)) return
+
+    const prevBlocks = persistence.getRoutine(prevISO)
+    if (!prevBlocks || prevBlocks.length === 0) return
+    if (!prevBlocks.every(b => b.completed)) return
+
+    const prevDailyXp = persistence.getDailyXp(prevISO)
+    if (prevDailyXp >= 30) return
+
+    const bonus = 30 - prevDailyXp
+    persistence.setDailyXp(prevISO, 30)
+    persistence.setAutoClaim(prevISO)
+    setTotalXp(xp => {
+      const n = xp + bonus
+      persistence.setXp(n)
+      return n
+    })
+    setToast(`Úgy látjuk, tegnap minden rutint teljesítettél! A ${bonus} XP jóváírva.`)
+  }, [])
+
   useEffect(() => { persistence.setRoutine(iso, blocks) },          [blocks, iso])
   useEffect(() => { persistence.setRecurring(recurringBlocks) },    [recurringBlocks])
 
-  // ── Quest operations — each action writes to localStorage synchronously ────
+  // ── Quest operations ───────────────────────────────────────────────────────
   const addTask = useCallback(({
     text, category, priority, polarity,
     isEpic = false, dueDate = null, createdDate = null,
@@ -104,9 +131,16 @@ export function AppContextProvider({ children }) {
         createdDate: isEpic ? createdDate : null,
       }, ...prev]
       persistence.setTasks(next)
+      // Recalculate daily XP — adding a task changes the denominator
+      const newDailyXp  = computeDailyXp(next)
+      const prevDailyXp = persistence.getDailyXp(iso)
+      if (newDailyXp !== prevDailyXp) {
+        persistence.setDailyXp(iso, newDailyXp)
+        setTotalXp(xp => { const n = Math.max(0, xp + newDailyXp - prevDailyXp); persistence.setXp(n); return n })
+      }
       return next
     })
-  }, [])
+  }, [iso])
 
   const toggleTask = useCallback((id) => {
     setTasks(prev => {
@@ -114,23 +148,27 @@ export function AppContextProvider({ children }) {
         if (t.id !== id) return t
         const polarity   = t.polarity ?? 'neutral'
         const nowDone    = !t.completed
-        const xpDelta    = getTaskXpDelta(polarity)
         const focusDelta = getTaskFocusDelta(polarity)
         if (nowDone) {
-          setTotalXp(xp => { const n = Math.max(0, xp + xpDelta); persistence.setXp(n); return n })
           setFocusMin(f  => { const n = Math.max(0, f + focusDelta); persistence.setFocusMin(n); return n })
           const today = todayISO()
           setActivity(act => { const n = { ...act, [today]: (act[today] ?? 0) + 5 }; persistence.setActivity(n); return n })
         } else {
-          setTotalXp(xp => { const n = Math.max(0, xp - xpDelta); persistence.setXp(n); return n })
           setFocusMin(f  => { const n = Math.max(0, f - focusDelta); persistence.setFocusMin(n); return n })
         }
         return { ...t, completed: nowDone }
       })
       persistence.setTasks(next)
+      // Recalculate daily XP ratio
+      const newDailyXp  = computeDailyXp(next)
+      const prevDailyXp = persistence.getDailyXp(iso)
+      if (newDailyXp !== prevDailyXp) {
+        persistence.setDailyXp(iso, newDailyXp)
+        setTotalXp(xp => { const n = Math.max(0, xp + newDailyXp - prevDailyXp); persistence.setXp(n); return n })
+      }
       return next
     })
-  }, [])
+  }, [iso])
 
   const overridePolarity = useCallback((id, newPolarity) => {
     setTasks(prev => {
@@ -138,9 +176,13 @@ export function AppContextProvider({ children }) {
         if (t.id !== id) return t
         const oldPolarity = t.polarity ?? 'neutral'
         if (oldPolarity === newPolarity) return t
+        // Polarity only affects focus minutes now — XP is ratio-based
         if (t.completed) {
-          setTotalXp(xp => { const n = Math.max(0, xp - getTaskXpDelta(oldPolarity) + getTaskXpDelta(newPolarity)); persistence.setXp(n); return n })
-          setFocusMin(f  => { const n = Math.max(0, f - getTaskFocusDelta(oldPolarity) + getTaskFocusDelta(newPolarity)); persistence.setFocusMin(n); return n })
+          setFocusMin(f => {
+            const n = Math.max(0, f - getTaskFocusDelta(oldPolarity) + getTaskFocusDelta(newPolarity))
+            persistence.setFocusMin(n)
+            return n
+          })
         }
         return { ...t, polarity: newPolarity }
       })
@@ -153,16 +195,22 @@ export function AppContextProvider({ children }) {
     setTasks(prev => {
       const task = prev.find(t => t.id === id)
       if (task?.completed) {
-        setTotalXp(xp => { const n = Math.max(0, xp - getTaskXpDelta(task.polarity ?? 'neutral')); persistence.setXp(n); return n })
-        setFocusMin(f  => { const n = Math.max(0, f - getTaskFocusDelta(task.polarity ?? 'neutral')); persistence.setFocusMin(n); return n })
+        setFocusMin(f => { const n = Math.max(0, f - getTaskFocusDelta(task.polarity ?? 'neutral')); persistence.setFocusMin(n); return n })
       }
       const next = prev.filter(t => t.id !== id)
       persistence.setTasks(next)
+      // Recalculate daily XP — removing a task changes the denominator
+      const newDailyXp  = computeDailyXp(next)
+      const prevDailyXp = persistence.getDailyXp(iso)
+      if (newDailyXp !== prevDailyXp) {
+        persistence.setDailyXp(iso, newDailyXp)
+        setTotalXp(xp => { const n = Math.max(0, xp + newDailyXp - prevDailyXp); persistence.setXp(n); return n })
+      }
       return next
     })
-  }, [])
+  }, [iso])
 
-  // ── Routine operations — each action writes to localStorage synchronously ──
+  // ── Routine operations ─────────────────────────────────────────────────────
   const cascadeBlock = useCallback((blockId, deltaMinutes) => {
     setBlocks(prev => {
       if (wouldExceedMidnight(prev, blockId, deltaMinutes)) return prev
@@ -183,8 +231,6 @@ export function AppContextProvider({ children }) {
   const deleteBlock = useCallback((blockId) => {
     setBlocks(prev => {
       const block = prev.find(b => b.id === blockId)
-      // Materialized recurring block deleted from today's view → write tombstone so
-      // buildInitialBlocks never re-injects it on subsequent loads for this date.
       if (block?.recurring_source_id) {
         const current = persistence.getExcludedRecurring(iso)
         if (!current.includes(blockId)) {
@@ -256,10 +302,11 @@ export function AppContextProvider({ children }) {
     // Routine
     blocks, recurringBlocks, baselineFinish,
     setBaselineFinish,
-    // Exposed for bulk-replace (Reset Default / Load Last Weekday)
     _setBlocksDirect: setBlocks,
     cascadeBlock, toggleBlock, deleteBlock, deleteRecurring,
     addBlock, addRecurring, updateRoutineBlock,
+    // Toast
+    toast, dismissToast,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

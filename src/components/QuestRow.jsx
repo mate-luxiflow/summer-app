@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CATEGORIES, PRIORITY, POLARITY, getTaskXpDelta, cyclePolarity } from '../store'
+import { CATEGORIES, PRIORITY, POLARITY, cyclePolarity } from '../store'
 
 function CompletionBurst() {
   const particles = Array.from({ length: 8 }, (_, i) => ({
@@ -61,11 +61,10 @@ function PolarityDot({ polarity, onCycle }) {
   )
 }
 
-const QuestRow = memo(function QuestRow({ task, onToggle, onDelete, onPolarityChange, index }) {
+const QuestRow = memo(function QuestRow({ task, onToggle, onDelete, onPolarityChange, index, xpValue = 0 }) {
   const cat      = CATEGORIES[task.category] ?? CATEGORIES.grind
   const pri      = PRIORITY[task.priority]   ?? PRIORITY.medium
   const polarity = task.polarity ?? 'neutral'
-  const xpDelta  = getTaskXpDelta(polarity)
 
   return (
     <motion.div
@@ -147,18 +146,18 @@ const QuestRow = memo(function QuestRow({ task, onToggle, onDelete, onPolarityCh
         {pri.label}
       </div>
 
-      {/* XP pill — negatív/semleges esetén 0 XP, kiszürkítve */}
+      {/* XP pill — dynamic value from daily pool */}
       <div
         className={`shrink-0 px-2 py-0.5 rounded-md text-[10px] font-bold border transition-all duration-300 ${
           task.completed ? 'opacity-25' : 'opacity-90'
         }`}
         style={
-          xpDelta > 0
+          xpValue > 0
             ? { color: cat.accent, borderColor: cat.accent + '40', background: cat.accent + '12' }
             : { color: '#64748b',  borderColor: '#64748b40',        background: '#64748b12' }
         }
       >
-        {xpDelta > 0 ? `+${xpDelta}` : '0'} XP
+        {xpValue > 0 ? `+${xpValue}` : '0'} XP
       </div>
 
       {/* ── Törlés gomb — WCAG 2.2 Mobile: 44×44px touch target ──────────────

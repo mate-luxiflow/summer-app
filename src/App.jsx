@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Dashboard    from './screens/Dashboard'
 import DailyRoutine from './screens/DailyRoutine'
+import { useAppContext } from './context/AppContext'
 
 function ComingSoon({ label }) {
   return (
@@ -66,6 +67,14 @@ const TABS = [
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [navHidden, setNavHidden] = useState(false)
+  const { toast, dismissToast } = useAppContext()
+
+  // Auto-dismiss toast after 5 s
+  useEffect(() => {
+    if (!toast) return
+    const id = setTimeout(dismissToast, 5000)
+    return () => clearTimeout(id)
+  }, [toast, dismissToast])
 
   // Szoftveres billentyűzet detektálása — fixált nav eltüntetése gépeléskor
   useEffect(() => {
@@ -144,6 +153,52 @@ export default function App() {
             {/* iOS home indicator safe area */}
             <div style={{ height: 'env(safe-area-inset-bottom, 0px)' }} />
           </motion.nav>
+        )}
+      </AnimatePresence>
+
+      {/* Auto-claim toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            key="autoclaim-toast"
+            initial={{ opacity: 0, y: -20, scale: 0.94 }}
+            animate={{ opacity: 1, y: 0,   scale: 1    }}
+            exit={{ opacity: 0,    y: -14, scale: 0.96 }}
+            transition={{ duration: 0.30, ease: [0.16, 1, 0.3, 1] }}
+            onClick={dismissToast}
+            className="fixed inset-x-4 z-90 flex items-center gap-3 rounded-2xl px-4 py-3 cursor-pointer"
+            style={{
+              top: 'calc(env(safe-area-inset-top, 0px) + 10px)',
+              maxWidth: 400,
+              margin: '0 auto',
+              background: 'linear-gradient(135deg, #0c1f0e 0%, #080f09 100%)',
+              border: '1px solid rgba(34,197,94,0.35)',
+              boxShadow: '0 8px 36px rgba(0,0,0,0.72), 0 0 24px rgba(34,197,94,0.10)',
+            }}
+            role="alert"
+            aria-live="polite"
+          >
+            <div
+              className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center"
+              style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.30)' }}
+            >
+              <span className="text-base leading-none select-none">✅</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[9px] font-black uppercase tracking-[0.14em] text-green-400/65 mb-0.5">Auto-Claim</p>
+              <p className="text-[12px] font-semibold text-white/78 leading-snug">{toast}</p>
+            </div>
+            <button
+              onClick={e => { e.stopPropagation(); dismissToast() }}
+              className="shrink-0 flex items-center justify-center w-7 h-7 rounded-full"
+              style={{ color: 'rgba(255,255,255,0.22)' }}
+              aria-label="Dismiss notification"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

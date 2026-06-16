@@ -14,6 +14,7 @@ const DAY_CHIP_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 export default function AddRoutineForm({
   onAdd, onAddRecurring,
   editingBlock, onExitEdit, onUpdate,
+  onBlockSaved,  // (name: string) => void — fires after every successful add/save
 }) {
   const [name,        setName]       = useState('')
   const [category,    setCategory]   = useState('productivity')
@@ -83,20 +84,18 @@ export default function AddRoutineForm({
     if (!isEditMode && isRecurring && selectedDays.length === 0) { setError('Select at least one day'); return }
     setError('')
 
+    const resolvedName = name.trim() || selectedCat?.label || 'New Block'
+
     if (isEditMode) {
-      onUpdate?.(editingBlock.id, {
-        name:      name.trim() || selectedCat?.label || 'New Block',
-        category,
-        startTime,
-        endTime,
-      })
+      onUpdate?.(editingBlock.id, { name: resolvedName, category, startTime, endTime })
       onExitEdit?.()
+      onBlockSaved?.(resolvedName)
       return
     }
 
     const blockBase = {
       id:        `${isRecurring ? 'rec' : 'custom'}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      name:      name.trim() || selectedCat?.label || 'New Block',
+      name:      resolvedName,
       category,
       polarity:  getDefaultPolarity(category),
       startTime,
@@ -110,6 +109,7 @@ export default function AddRoutineForm({
       onAdd(blockBase)
     }
 
+    onBlockSaved?.(resolvedName)
     setName('')
     setStart('')
     setEnd('')

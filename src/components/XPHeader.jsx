@@ -8,7 +8,7 @@ function todayLabel() {
 }
 
 export default function XPHeader({ totalXp, completedCount, totalCount, streak }) {
-  const { level, xpIntoLevel, pct } = getLevelInfo(totalXp)
+  const { level, xpIntoLevel, xpForLevel, pct } = getLevelInfo(totalXp)
   const rank = getRankInfo(level)
   const taskPct = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100)
 
@@ -74,7 +74,7 @@ export default function XPHeader({ totalXp, completedCount, totalCount, streak }
         </div>
         <div className="flex justify-between items-center mb-4">
           <span className="text-[10px] text-white/20 tabular-nums">Lv {level}</span>
-          <span className="text-[10px] text-white/25 tabular-nums">{xpIntoLevel} / {100} XP</span>
+          <span className="text-[10px] text-white/25 tabular-nums">{xpIntoLevel} / {xpForLevel} XP</span>
           <span className="text-[10px] text-white/20 tabular-nums">Lv {level + 1}</span>
         </div>
 

@@ -25,6 +25,10 @@ export default function Dashboard() {
   const regularPending = tasks.filter(t => !t.isEpic && !t.completed)
   const allCompleted   = tasks.filter(t =>  t.completed)
 
+  // Per-quest XP display value: 30 XP pool ÷ total non-epic quests
+  const nonEpicCount = tasks.filter(t => !t.isEpic).length
+  const perQuestXp   = nonEpicCount > 0 ? Math.round(30 / nonEpicCount) : 0
+
   return (
     <div className="w-full bg-[#0a0a0f]">
 
@@ -96,6 +100,7 @@ export default function Dashboard() {
               <QuestRow
                 task={task}
                 index={i}
+                xpValue={perQuestXp}
                 onToggle={() => toggleTask(task.id)}
                 onDelete={() => deleteTask(task.id)}
                 onPolarityChange={p => overridePolarity(task.id, p)}
@@ -107,6 +112,7 @@ export default function Dashboard() {
         {allCompleted.length > 0 && (
           <CompletedSection
             tasks={allCompleted}
+            perQuestXp={perQuestXp}
             onToggle={toggleTask}
             onDelete={deleteTask}
             onPolarityChange={overridePolarity}
@@ -117,7 +123,7 @@ export default function Dashboard() {
   )
 }
 
-function CompletedSection({ tasks, onToggle, onDelete, onPolarityChange }) {
+function CompletedSection({ tasks, perQuestXp, onToggle, onDelete, onPolarityChange }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -152,6 +158,7 @@ function CompletedSection({ tasks, onToggle, onDelete, onPolarityChange }) {
                   <QuestRow
                     task={task}
                     index={i}
+                    xpValue={perQuestXp}
                     onToggle={() => onToggle(task.id)}
                     onDelete={() => onDelete(task.id)}
                     onPolarityChange={p => onPolarityChange(task.id, p)}

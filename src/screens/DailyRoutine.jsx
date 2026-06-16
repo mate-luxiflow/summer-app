@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, memo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import EstimatedFinishBanner from '../components/EstimatedFinishBanner'
-import AddRoutineForm        from '../components/AddRoutineForm'
+import EstimatedFinishBanner  from '../components/EstimatedFinishBanner'
+import AddRoutineForm         from '../components/AddRoutineForm'
+import RoutineToQuestModal    from '../components/RoutineToQuestModal'
 import { useAppContext, TODAY_IDX } from '../context/AppContext'
 import {
   CATEGORIES, POLARITY,
@@ -20,9 +21,11 @@ export default function DailyRoutine() {
     setBaselineFinish, _setBlocksDirect,
     cascadeBlock, toggleBlock, deleteBlock, deleteRecurring,
     addBlock, addRecurring, updateRoutineBlock,
+    addTask,
   } = useAppContext()
 
-  const [editingBlock, setEditingBlock] = useState(null)
+  const [editingBlock,       setEditingBlock]       = useState(null)
+  const [pendingRoutineName, setPendingRoutineName] = useState(null)
 
   const iso       = todayISO()
   const todayName = getTodayDayName()
@@ -260,6 +263,7 @@ export default function DailyRoutine() {
           editingBlock={editingBlock}
           onExitEdit={() => setEditingBlock(null)}
           onUpdate={updateRoutineBlock}
+          onBlockSaved={setPendingRoutineName}
         />
       )}
 
@@ -302,6 +306,25 @@ export default function DailyRoutine() {
           })}
         </AnimatePresence>
       </div>
+
+      {/* Routine → Quest intercept modal */}
+      <RoutineToQuestModal
+        blockName={pendingRoutineName}
+        onConfirm={() => {
+          if (pendingRoutineName) {
+            addTask({
+              text:        pendingRoutineName,
+              category:    'productivity',
+              priority:    'medium',
+              polarity:    'positive',
+              isEpic:      false,
+              createdDate: todayISO(),
+            })
+          }
+          setPendingRoutineName(null)
+        }}
+        onDismiss={() => setPendingRoutineName(null)}
+      />
     </div>
   )
 }

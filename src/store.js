@@ -1,6 +1,5 @@
 // ── Constants ─────────────────────────────────────────────────────────────────
-export const XP_PER_TASK          = 20
-export const XP_PER_LEVEL         = 100
+export const DAILY_XP_CAP         = 30   // max XP earnable per day from quests
 export const FOCUS_CURRENCY_KEY   = 'sg_focus_minutes'
 export const STORE_MINUTES_PER_TASK = 10 // focus perc pozitív taskonként
 
@@ -55,9 +54,15 @@ export function cyclePolarity(current) {
   return POLARITY_CYCLE[(idx + 1) % POLARITY_CYCLE.length]
 }
 
-/** XP delta a task bejelölésekor (csak pozitív kap XP-t) */
-export function getTaskXpDelta(polarity = 'neutral') {
-  return polarity === 'positive' ? XP_PER_TASK : 0
+/**
+ * Dinamikus napi XP: (teljesített / összes nem-epic) × 30
+ * A visszatérési érték egész szám, 0–30 közt.
+ */
+export function computeDailyXp(tasks) {
+  const daily     = tasks.filter(t => !t.isEpic)
+  const total     = daily.length
+  const completed = daily.filter(t => t.completed).length
+  return total === 0 ? 0 : Math.round((completed / total) * DAILY_XP_CAP)
 }
 
 /** Focus-perc delta (negatív fizet, pozitív kap, semleges nulla) */
@@ -219,10 +224,31 @@ export function getRankInfo(level) {
   return rank
 }
 
+/**
+ * Szintgörbe nerf:
+ *   L < 10 → küszöb = 100 + (L-1)×10  (110, 120 … 190)
+ *   L ≥ 10 → küszöb = 200 (plató)
+ */
+export function xpThreshold(level) {
+  return level < 10 ? 100 + (level - 1) * 10 : 200
+}
+
 export function getLevelInfo(totalXp) {
-  const level       = Math.floor(totalXp / XP_PER_LEVEL) + 1
-  const xpIntoLevel = totalXp % XP_PER_LEVEL
-  return { level, xpIntoLevel, pct: Math.round((xpIntoLevel / XP_PER_LEVEL) * 100) }
+  let level     = 1
+  let remaining = totalXp
+  while (true) {
+    const threshold = xpThreshold(level)
+    if (remaining < threshold) {
+      return {
+        level,
+        xpIntoLevel: remaining,
+        xpForLevel:  threshold,
+        pct: Math.round((remaining / threshold) * 100),
+      }
+    }
+    remaining -= threshold
+    level++
+  }
 }
 
 // ── Perzisztencia ─────────────────────────────────────────────────────────────
@@ -255,6 +281,12 @@ export const persistence = {
   // Prevents buildInitialBlocks from re-injecting them on every subsequent app load.
   getExcludedRecurring: iso => load(`sg_excl_rec_${iso}`, []),
   setExcludedRecurring: (iso, ids) => localStorage.setItem(`sg_excl_rec_${iso}`, JSON.stringify(ids)),
+  // Per-nap szerzett XP (0–30), a dinamikus arány-alapú rendszerhez
+  getDailyXp:  iso => { const n = Number(localStorage.getItem(`sg_daily_xp_${iso}`)); return isFinite(n) ? n : 0 },
+  setDailyXp:  (iso, v) => localStorage.setItem(`sg_daily_xp_${iso}`, String(Math.max(0, Math.min(DAILY_XP_CAP, Math.round(v))))),
+  // Retroaktív auto-claim tombstone (megakadályozza a kétszeres jóváírást)
+  getAutoClaim: iso => localStorage.getItem(`sg_autoclaim_${iso}`) === '1',
+  setAutoClaim: iso => localStorage.setItem(`sg_autoclaim_${iso}`, '1'),
 }
 
 // ── Dátum-segédletek ──────────────────────────────────────────────────────────
