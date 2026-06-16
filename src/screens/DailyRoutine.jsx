@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, memo, useCallback } from 'react'
+import { useState, useEffect, useMemo, memo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import EstimatedFinishBanner from '../components/EstimatedFinishBanner'
 import AddRoutineForm        from '../components/AddRoutineForm'
@@ -19,8 +19,10 @@ export default function DailyRoutine() {
     blocks, recurringBlocks, baselineFinish,
     setBaselineFinish, _setBlocksDirect,
     cascadeBlock, toggleBlock, deleteBlock, deleteRecurring,
-    addBlock, addRecurring,
+    addBlock, addRecurring, updateRoutineBlock,
   } = useAppContext()
+
+  const [editingBlock, setEditingBlock] = useState(null)
 
   const iso       = todayISO()
   const todayName = getTodayDayName()
@@ -67,6 +69,16 @@ export default function DailyRoutine() {
       deleteRecurring(blockId)
     }
   }, [isToday, deleteBlock, deleteRecurring])
+
+  const handleEditBlock = useCallback((block) => {
+    // Look up days from recurring template if this is a materialized recurring block
+    let blockWithDays = block
+    if (block.recurring_source_id) {
+      const source = recurringBlocks.find(rb => rb.id === block.recurring_source_id)
+      if (source?.days) blockWithDays = { ...block, days: source.days }
+    }
+    setEditingBlock(blockWithDays)
+  }, [recurringBlocks])
 
   // ── Time-Machine ─────────────────────────────────────────────────────────
   function loadLastWeekday() {
@@ -242,7 +254,13 @@ export default function DailyRoutine() {
       )}
 
       {isToday && (
-        <AddRoutineForm onAdd={addBlock} onAddRecurring={addRecurring} />
+        <AddRoutineForm
+          onAdd={addBlock}
+          onAddRecurring={addRecurring}
+          editingBlock={editingBlock}
+          onExitEdit={() => setEditingBlock(null)}
+          onUpdate={updateRoutineBlock}
+        />
       )}
 
       {/* Block timeline */}
@@ -278,6 +296,7 @@ export default function DailyRoutine() {
                 onToggle={() => handleToggle(block.id)}
                 onCascade={delta => handleCascade(block.id, delta)}
                 onDelete={() => handleDeleteBlock(block.id)}
+                onEdit={handleEditBlock}
               />
             )
           })}
@@ -289,11 +308,23 @@ export default function DailyRoutine() {
 
 // ── Routine block card ────────────────────────────────────────────────────────
 const RoutineBlock = memo(function RoutineBlock({
-  block, index, isActive, isPast, isToday, onToggle, onCascade, onDelete,
+  block, index, isActive, isPast, isToday, onToggle, onCascade, onDelete, onEdit,
 }) {
   const cat = CATEGORIES[block.category] ?? CATEGORIES.grind
   const pol = POLARITY[block.polarity ?? 'neutral']
   const dur = blockDuration(block.startTime, block.endTime)
+
+  const [menuOpen,    setMenuOpen]    = useState(false)
+  const pressTimerRef                 = useRef(null)
+
+  useEffect(() => () => clearTimeout(pressTimerRef.current), [])
+
+  function handleTouchStart() {
+    if (!isToday) return
+    pressTimerRef.current = setTimeout(() => setMenuOpen(true), 500)
+  }
+  function handleTouchEnd()  { clearTimeout(pressTimerRef.current) }
+  function handleTouchMove() { clearTimeout(pressTimerRef.current) }
 
   return (
     <motion.div
@@ -304,6 +335,44 @@ const RoutineBlock = memo(function RoutineBlock({
       transition={{ delay: index * 0.025, duration: 0.22 }}
       className="relative mb-1"
     >
+      {/* Full-screen backdrop closes menu on outside tap */}
+      {menuOpen && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
+
+      {/* Context menu — appears above the card */}
+      <AnimatePresence>
+        {menuOpen && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.90, y: 6 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.88, y: 6 }}
+            transition={{ duration: 0.14, ease: 'easeOut' }}
+            className="absolute right-2 bottom-full mb-2 z-50 rounded-xl overflow-hidden"
+            style={{
+              background:  '#0d0d14',
+              border:      '1px solid rgba(6,182,212,0.35)',
+              boxShadow:   '0 4px 28px rgba(0,0,0,0.70), 0 0 18px rgba(6,182,212,0.12)',
+              minWidth:    148,
+            }}
+          >
+            <button
+              onClick={() => { setMenuOpen(false); onEdit?.(block) }}
+              className="w-full flex items-center gap-2.5 px-3.5 py-3 text-[12px] font-bold text-white/75 transition-colors duration-150"
+              style={{ touchAction: 'manipulation' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(6,182,212,0.08)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <span className="text-[14px]">✏️</span>
+              Edit Block
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {index > 0 && (
         <div className="absolute left-4.75 -top-1 w-px h-1 bg-white/10" />
       )}
@@ -323,10 +392,16 @@ const RoutineBlock = memo(function RoutineBlock({
             : block.completed
               ? 'rgba(255,255,255,0.03)'
               : 'rgba(255,255,255,0.06)',
-          opacity: !isToday ? 0.72 : 1,
+          opacity:     !isToday ? 0.72 : 1,
+          userSelect:  'none',
+          WebkitUserSelect: 'none',
         }}
-        whileTap={isToday ? { scale: 0.988 } : {}}
-        onClick={isToday ? onToggle : undefined}
+        whileTap={isToday && !menuOpen ? { scale: 0.988 } : {}}
+        onClick={isToday && !menuOpen ? onToggle : undefined}
+        onContextMenu={e => { e.preventDefault(); e.stopPropagation() }}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchMove={handleTouchMove}
         role={isToday ? 'checkbox' : 'listitem'}
         aria-checked={isToday ? block.completed : undefined}
         tabIndex={isToday ? 0 : -1}
@@ -375,8 +450,12 @@ const RoutineBlock = memo(function RoutineBlock({
           </p>
         </div>
 
-        {/* Right: time + cascade + delete */}
-        <div className="flex items-center gap-1 pr-1 py-3" onClick={e => e.stopPropagation()}>
+        {/* Right: time + cascade + delete — stops touch propagation to prevent long-press */}
+        <div
+          className="flex items-center gap-1 pr-1 py-3"
+          onClick={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
+        >
           <div className="text-right mr-1">
             <p className="text-[12px] font-mono font-bold tabular-nums whitespace-nowrap"
               style={{ color: isActive ? cat.accent : 'rgba(255,255,255,0.55)' }}

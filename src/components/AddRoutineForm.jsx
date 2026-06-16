@@ -1,40 +1,66 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CATEGORIES, getDefaultPolarity, timeToMinutes } from '../store'
 
 const CAT_ENTRIES = Object.entries(CATEGORIES)
 
-// Nap-preset konfigurációk a day selectorhoz
 const DAY_PRESETS = [
   { key: 'everyday', label: 'Everyday', days: [0, 1, 2, 3, 4, 5, 6] },
   { key: 'weekdays', label: 'Weekdays', days: [1, 2, 3, 4, 5] },
   { key: 'custom',   label: 'Custom',   days: null },
 ]
-// Nap chipek (rövid, index = JS getDay() értéke: 0=Vasárnap)
 const DAY_CHIP_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
-export default function AddRoutineForm({ onAdd, onAddRecurring }) {
-  const [name,       setName]      = useState('')
-  const [category,   setCategory]  = useState('productivity')
-  const [startTime,  setStart]     = useState('')
-  const [endTime,    setEnd]       = useState('')
-  const [error,      setError]     = useState('')
-
-  // ── Recurring state ──────────────────────────────────────────────────────
+export default function AddRoutineForm({
+  onAdd, onAddRecurring,
+  editingBlock, onExitEdit, onUpdate,
+}) {
+  const [name,        setName]       = useState('')
+  const [category,    setCategory]   = useState('productivity')
+  const [startTime,   setStart]      = useState('')
+  const [endTime,     setEnd]        = useState('')
+  const [error,       setError]      = useState('')
   const [isRecurring, setIsRecurring] = useState(false)
-  const [dayPreset,   setDayPreset]   = useState('everyday')
-  // Kiválasztott napok tömbje (0–6); alapértelmezés: minden nap
+  const [dayPreset,   setDayPreset]  = useState('everyday')
   const [selectedDays, setSelectedDays] = useState([0, 1, 2, 3, 4, 5, 6])
 
+  const isEditMode  = !!editingBlock
   const selectedCat = CATEGORIES[category]
 
-  // Preset chip kiválasztása (Everyday / Weekdays) beállítja a days tömböt is
+  // Pre-populate all fields when editingBlock changes
+  useEffect(() => {
+    if (!editingBlock) {
+      setName('')
+      setCategory('productivity')
+      setStart('')
+      setEnd('')
+      setError('')
+      setIsRecurring(false)
+      setDayPreset('everyday')
+      setSelectedDays([0, 1, 2, 3, 4, 5, 6])
+      return
+    }
+    setName(editingBlock.name ?? '')
+    setCategory(editingBlock.category ?? 'productivity')
+    setStart(editingBlock.startTime ?? '')
+    setEnd(editingBlock.endTime ?? '')
+    setError('')
+    if (editingBlock.days?.length > 0) {
+      setIsRecurring(true)
+      setSelectedDays(editingBlock.days)
+      setDayPreset('custom')
+    } else {
+      setIsRecurring(false)
+      setDayPreset('everyday')
+      setSelectedDays([0, 1, 2, 3, 4, 5, 6])
+    }
+  }, [editingBlock])
+
   function handleDayPreset(preset) {
     setDayPreset(preset.key)
     if (preset.days !== null) setSelectedDays(preset.days)
   }
 
-  // Custom napchip toggle — automatikusan 'custom' presetre vált
   function toggleDay(idx) {
     setDayPreset('custom')
     setSelectedDays(prev =>
@@ -43,8 +69,8 @@ export default function AddRoutineForm({ onAdd, onAddRecurring }) {
   }
 
   function handleRecurringToggle() {
+    if (isEditMode) return  // recurring nature is fixed during edit
     setIsRecurring(v => !v)
-    // Reset day state ha kikapcsoljuk
     if (isRecurring) {
       setDayPreset('everyday')
       setSelectedDays([0, 1, 2, 3, 4, 5, 6])
@@ -54,9 +80,19 @@ export default function AddRoutineForm({ onAdd, onAddRecurring }) {
   function handleSubmit() {
     if (!startTime || !endTime) { setError('Set start & end time'); return }
     if (timeToMinutes(endTime) <= timeToMinutes(startTime)) { setError('End must be after start'); return }
-    if (isRecurring && selectedDays.length === 0) { setError('Select at least one day'); return }
-
+    if (!isEditMode && isRecurring && selectedDays.length === 0) { setError('Select at least one day'); return }
     setError('')
+
+    if (isEditMode) {
+      onUpdate?.(editingBlock.id, {
+        name:      name.trim() || selectedCat?.label || 'New Block',
+        category,
+        startTime,
+        endTime,
+      })
+      onExitEdit?.()
+      return
+    }
 
     const blockBase = {
       id:        `${isRecurring ? 'rec' : 'custom'}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -69,29 +105,59 @@ export default function AddRoutineForm({ onAdd, onAddRecurring }) {
     }
 
     if (isRecurring) {
-      // Recurring sablon: days mezővel, az onAddRecurring callback-en keresztül
       onAddRecurring?.({ ...blockBase, days: selectedDays })
     } else {
-      // One-time block: a mai nap listájához adódik (régi viselkedés)
       onAdd(blockBase)
     }
 
     setName('')
     setStart('')
     setEnd('')
-    // A recurring beállítások megmaradnak kényelmi okokból
   }
 
   return (
     <div
-      className="px-4 py-3 border-b border-white/6"
-      style={{ background: 'rgba(255,255,255,0.015)' }}
+      className="relative px-4 py-3 border-b border-white/6"
+      style={{
+        background:  isEditMode ? 'rgba(6,182,212,0.04)' : 'rgba(255,255,255,0.015)',
+        borderColor: isEditMode ? 'rgba(6,182,212,0.18)' : undefined,
+      }}
     >
-      <p className="text-[8px] font-black uppercase tracking-[0.15em] text-white/22 mb-2">
-        + Add Routine Block
-      </p>
+      {/* Edit mode accent strip */}
+      {isEditMode && (
+        <div
+          className="absolute top-0 left-0 right-0 h-0.5"
+          style={{
+            background: 'linear-gradient(90deg, #06b6d4, #f97316 50%, #06b6d4)',
+            boxShadow:  '0 0 10px rgba(6,182,212,0.45)',
+          }}
+        />
+      )}
 
-      {/* ── Kategória selector ──────────────────────────────────────────────── */}
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[8px] font-black uppercase tracking-[0.15em]"
+          style={{ color: isEditMode ? 'rgba(6,182,212,0.65)' : 'rgba(255,255,255,0.22)' }}
+        >
+          {isEditMode ? '✏️ Edit Routine Block' : '+ Add Routine Block'}
+        </p>
+        {isEditMode && (
+          <motion.button
+            whileTap={{ scale: 0.88 }}
+            onClick={onExitEdit}
+            className="text-[10px] font-bold text-white/28 hover:text-white/55 transition-colors duration-150 flex items-center gap-1"
+            style={{ touchAction: 'manipulation' }}
+            aria-label="Cancel editing"
+          >
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Cancel
+          </motion.button>
+        )}
+      </div>
+
+      {/* Category selector */}
       <div
         className="flex gap-1.5 overflow-x-auto mb-2.5"
         style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}
@@ -119,11 +185,10 @@ export default function AddRoutineForm({ onAdd, onAddRecurring }) {
         })}
       </div>
 
-      {/* ── Recurring toggle + day selector ────────────────────────────────── */}
+      {/* Recurring toggle + day selector */}
       <div className="mb-2.5">
-        {/* Recurring toggle pill */}
         <motion.button
-          whileTap={{ scale: 0.92 }}
+          whileTap={!isEditMode ? { scale: 0.92 } : {}}
           onClick={handleRecurringToggle}
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all duration-200 mb-2"
           style={{
@@ -131,12 +196,14 @@ export default function AddRoutineForm({ onAdd, onAddRecurring }) {
             background:  isRecurring ? 'rgba(99,102,241,0.14)' : 'rgba(255,255,255,0.03)',
             color:       isRecurring ? '#818cf8'                : 'rgba(255,255,255,0.25)',
             boxShadow:   isRecurring ? '0 0 12px rgba(99,102,241,0.25)' : 'none',
+            opacity:     isEditMode  ? 0.6 : 1,
+            cursor:      isEditMode  ? 'default' : 'pointer',
           }}
           aria-pressed={isRecurring}
+          aria-disabled={isEditMode}
         >
           <span className="text-[11px]">🔁</span>
           <span>Recurring</span>
-          {/* Toggle pill */}
           <div
             className="relative w-6 h-3 rounded-full transition-all duration-200 ml-0.5"
             style={{ background: isRecurring ? '#6366f1' : 'rgba(255,255,255,0.12)' }}
@@ -149,7 +216,6 @@ export default function AddRoutineForm({ onAdd, onAddRecurring }) {
           </div>
         </motion.button>
 
-        {/* Day selector — csak recurring módban jelenik meg */}
         <AnimatePresence>
           {isRecurring && (
             <motion.div
@@ -159,33 +225,34 @@ export default function AddRoutineForm({ onAdd, onAddRecurring }) {
               transition={{ duration: 0.18, ease: 'easeOut' }}
               className="overflow-hidden"
             >
-              {/* Preset chips: Everyday / Weekdays / Custom */}
-              <div className="flex gap-1.5 mb-2">
-                {DAY_PRESETS.map(preset => {
-                  const active = dayPreset === preset.key
-                  return (
-                    <motion.button
-                      key={preset.key}
-                      whileTap={{ scale: 0.88 }}
-                      onClick={() => handleDayPreset(preset)}
-                      className="px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all duration-150"
-                      style={{
-                        borderColor: active ? 'rgba(99,102,241,0.55)' : 'rgba(255,255,255,0.08)',
-                        background:  active ? 'rgba(99,102,241,0.18)' : 'rgba(255,255,255,0.03)',
-                        color:       active ? '#818cf8'                : 'rgba(255,255,255,0.32)',
-                      }}
-                      aria-pressed={active}
-                    >
-                      {preset.label}
-                    </motion.button>
-                  )
-                })}
-              </div>
+              {/* Preset chips — hidden in edit mode (days already pre-populated as custom) */}
+              {!isEditMode && (
+                <div className="flex gap-1.5 mb-2">
+                  {DAY_PRESETS.map(preset => {
+                    const active = dayPreset === preset.key
+                    return (
+                      <motion.button
+                        key={preset.key}
+                        whileTap={{ scale: 0.88 }}
+                        onClick={() => handleDayPreset(preset)}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all duration-150"
+                        style={{
+                          borderColor: active ? 'rgba(99,102,241,0.55)' : 'rgba(255,255,255,0.08)',
+                          background:  active ? 'rgba(99,102,241,0.18)' : 'rgba(255,255,255,0.03)',
+                          color:       active ? '#818cf8'                : 'rgba(255,255,255,0.32)',
+                        }}
+                        aria-pressed={active}
+                      >
+                        {preset.label}
+                      </motion.button>
+                    )
+                  })}
+                </div>
+              )}
 
-              {/* Egyedi nap chipek (S M T W T F S) — WCAG 2.2: min 44×44px touch target.
-                   Custom módban aktívan szerkeszthető; Everyday/Weekdays módban read-only preview. */}
+              {/* Day chips — always shown when recurring, interactive only in custom mode or edit mode */}
               <AnimatePresence>
-                {dayPreset === 'custom' && (
+                {(dayPreset === 'custom' || isEditMode) && (
                   <motion.div
                     key="custom-days"
                     initial={{ opacity: 0, y: -4 }}
@@ -199,8 +266,8 @@ export default function AddRoutineForm({ onAdd, onAddRecurring }) {
                       return (
                         <motion.button
                           key={idx}
-                          whileTap={{ scale: 0.82 }}
-                          onClick={() => toggleDay(idx)}
+                          whileTap={isEditMode ? {} : { scale: 0.82 }}
+                          onClick={() => !isEditMode && toggleDay(idx)}
                           className="flex items-center justify-center rounded-xl text-[11px] font-black border transition-all duration-150"
                           style={{
                             width:       44,
@@ -210,6 +277,8 @@ export default function AddRoutineForm({ onAdd, onAddRecurring }) {
                             color:       active ? '#818cf8'                : 'rgba(255,255,255,0.28)',
                             boxShadow:   active ? '0 0 8px rgba(99,102,241,0.22)' : 'none',
                             touchAction: 'manipulation',
+                            cursor:      isEditMode ? 'default' : 'pointer',
+                            opacity:     isEditMode ? 0.7 : 1,
                           }}
                           aria-pressed={active}
                           aria-label={['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][idx]}
@@ -226,7 +295,7 @@ export default function AddRoutineForm({ onAdd, onAddRecurring }) {
         </AnimatePresence>
       </div>
 
-      {/* ── Név + idő inputok + Add gomb ─────────────────────────────────── */}
+      {/* Name + time inputs + submit button */}
       <div className="flex items-center gap-2">
         <input
           type="text"
@@ -236,7 +305,10 @@ export default function AddRoutineForm({ onAdd, onAddRecurring }) {
           placeholder={selectedCat?.label ?? 'Block name...'}
           maxLength={50}
           className="flex-1 min-w-0 h-9 rounded-xl px-3 text-[12px] text-white placeholder-white/22 outline-none border transition-colors duration-150 focus:border-white/22"
-          style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.08)' }}
+          style={{
+            background:  'rgba(255,255,255,0.04)',
+            borderColor: isEditMode ? 'rgba(6,182,212,0.22)' : 'rgba(255,255,255,0.08)',
+          }}
         />
 
         <input
@@ -245,8 +317,8 @@ export default function AddRoutineForm({ onAdd, onAddRecurring }) {
           onChange={e => { setStart(e.target.value); setError('') }}
           className="h-9 rounded-xl px-2 text-[12px] font-mono font-semibold text-white/75 outline-none border transition-colors duration-150"
           style={{
-            width: '76px',
-            background: 'rgba(255,255,255,0.04)',
+            width:       '76px',
+            background:  'rgba(255,255,255,0.04)',
             borderColor: startTime ? (selectedCat?.accent ?? '#fff') + '40' : 'rgba(255,255,255,0.08)',
             colorScheme: 'dark',
           }}
@@ -261,8 +333,8 @@ export default function AddRoutineForm({ onAdd, onAddRecurring }) {
           onChange={e => { setEnd(e.target.value); setError('') }}
           className="h-9 rounded-xl px-2 text-[12px] font-mono font-semibold text-white/75 outline-none border transition-colors duration-150"
           style={{
-            width: '76px',
-            background: 'rgba(255,255,255,0.04)',
+            width:       '76px',
+            background:  'rgba(255,255,255,0.04)',
             borderColor: endTime ? (selectedCat?.accent ?? '#fff') + '40' : 'rgba(255,255,255,0.08)',
             colorScheme: 'dark',
           }}
@@ -274,22 +346,37 @@ export default function AddRoutineForm({ onAdd, onAddRecurring }) {
           onClick={handleSubmit}
           className="shrink-0 h-9 px-3 rounded-xl flex items-center gap-1.5 font-bold text-[12px] text-white"
           style={{
-            background: isRecurring
-              ? 'linear-gradient(135deg, #6366f1ee, #4f46e5aa)'
-              : selectedCat
-                ? `linear-gradient(135deg, ${selectedCat.accent}ee, ${selectedCat.accent}88)`
-                : 'linear-gradient(135deg, #a78bfa, #7c3aed)',
-            boxShadow: isRecurring
-              ? '0 2px 14px rgba(99,102,241,0.35)'
-              : `0 2px 14px ${selectedCat?.accent ?? '#a78bfa'}38`,
+            background: isEditMode
+              ? 'linear-gradient(135deg, #06b6d4dd, #f97316cc)'
+              : isRecurring
+                ? 'linear-gradient(135deg, #6366f1ee, #4f46e5aa)'
+                : selectedCat
+                  ? `linear-gradient(135deg, ${selectedCat.accent}ee, ${selectedCat.accent}88)`
+                  : 'linear-gradient(135deg, #a78bfa, #7c3aed)',
+            boxShadow: isEditMode
+              ? '0 2px 16px rgba(6,182,212,0.40)'
+              : isRecurring
+                ? '0 2px 14px rgba(99,102,241,0.35)'
+                : `0 2px 14px ${selectedCat?.accent ?? '#a78bfa'}38`,
             touchAction: 'manipulation',
           }}
-          aria-label="Add routine block"
+          aria-label={isEditMode ? 'Save changes' : 'Add routine block'}
         >
-          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.8}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          <span className="whitespace-nowrap">Add</span>
+          {isEditMode ? (
+            <>
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="whitespace-nowrap">Save</span>
+            </>
+          ) : (
+            <>
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="whitespace-nowrap">Add</span>
+            </>
+          )}
         </motion.button>
       </div>
 

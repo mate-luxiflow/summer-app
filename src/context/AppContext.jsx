@@ -236,6 +236,19 @@ export function AppContextProvider({ children }) {
     }
   }, [iso])
 
+  const updateRoutineBlock = useCallback((blockId, { name, category, startTime, endTime }) => {
+    setBlocks(prev => {
+      const next = prev
+        .map(b => b.id === blockId
+          ? { ...b, name, category, polarity: getDefaultPolarity(category), startTime, endTime }
+          : b
+        )
+        .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
+      persistence.setRoutine(iso, next)
+      return next
+    })
+  }, [iso])
+
   const value = {
     // Quest
     tasks, totalXp, focusMin, activity,
@@ -246,7 +259,7 @@ export function AppContextProvider({ children }) {
     // Exposed for bulk-replace (Reset Default / Load Last Weekday)
     _setBlocksDirect: setBlocks,
     cascadeBlock, toggleBlock, deleteBlock, deleteRecurring,
-    addBlock, addRecurring,
+    addBlock, addRecurring, updateRoutineBlock,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
