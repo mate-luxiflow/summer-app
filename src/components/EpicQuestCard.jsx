@@ -186,19 +186,24 @@ const EpicQuestCard = memo(function EpicQuestCard({ task, onToggle, onDelete, on
               </AnimatePresence>
             </motion.button>
 
-            {/* Delete */}
+            {/* Delete — WCAG 2.2 Mobile: 44×44px touch target, mindig látható mobilon */}
             <motion.button
               whileTap={{ scale: 0.80 }}
               onClick={e => { e.stopPropagation(); onDelete() }}
-              className="w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-150"
+              className="relative flex items-center justify-center rounded-lg transition-all duration-150"
               style={{
-                background: 'rgba(239,68,68,0.07)',
-                color:      'rgba(239,68,68,0.45)',
-                border:     '1px solid rgba(239,68,68,0.12)',
+                width:       44,
+                height:      44,
+                marginRight: -8,
+                marginTop:   -8,
+                marginBottom:-8,
+                background:  'rgba(239,68,68,0.07)',
+                border:      '1px solid rgba(239,68,68,0.12)',
+                touchAction: 'manipulation',
               }}
               aria-label="Delete epic quest"
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-3.5 h-3.5" style={{ color: 'rgba(239,68,68,0.50)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </motion.button>

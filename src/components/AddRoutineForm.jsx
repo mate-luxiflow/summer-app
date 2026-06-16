@@ -182,35 +182,45 @@ export default function AddRoutineForm({ onAdd, onAddRecurring }) {
                 })}
               </div>
 
-              {/* Egyedi nap chipek (S M T W T F S) — custom módban aktívak */}
-              <div className="flex gap-1.5">
-                {DAY_CHIP_LABELS.map((label, idx) => {
-                  const active = selectedDays.includes(idx)
-                  return (
-                    <motion.button
-                      key={idx}
-                      whileTap={{ scale: 0.82 }}
-                      onClick={() => toggleDay(idx)}
-                      // WCAG 2.2: minimum 44×44px touch target
-                      className="flex items-center justify-center rounded-xl text-[11px] font-black border transition-all duration-150"
-                      style={{
-                        width:       44,
-                        height:      36,
-                        borderColor: active ? 'rgba(99,102,241,0.60)' : 'rgba(255,255,255,0.08)',
-                        background:  active ? 'rgba(99,102,241,0.22)' : 'rgba(255,255,255,0.03)',
-                        color:       active ? '#818cf8'                : 'rgba(255,255,255,0.28)',
-                        boxShadow:   active ? '0 0 8px rgba(99,102,241,0.22)' : 'none',
-                        // touch-action: manipulation eltávolítja a 300ms delay-t iOS Safari-n
-                        touchAction: 'manipulation',
-                      }}
-                      aria-pressed={active}
-                      aria-label={['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][idx]}
-                    >
-                      {label}
-                    </motion.button>
-                  )
-                })}
-              </div>
+              {/* Egyedi nap chipek (S M T W T F S) — WCAG 2.2: min 44×44px touch target.
+                   Custom módban aktívan szerkeszthető; Everyday/Weekdays módban read-only preview. */}
+              <AnimatePresence>
+                {dayPreset === 'custom' && (
+                  <motion.div
+                    key="custom-days"
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex gap-1.5"
+                  >
+                    {DAY_CHIP_LABELS.map((label, idx) => {
+                      const active = selectedDays.includes(idx)
+                      return (
+                        <motion.button
+                          key={idx}
+                          whileTap={{ scale: 0.82 }}
+                          onClick={() => toggleDay(idx)}
+                          className="flex items-center justify-center rounded-xl text-[11px] font-black border transition-all duration-150"
+                          style={{
+                            width:       44,
+                            height:      44,
+                            borderColor: active ? 'rgba(99,102,241,0.60)' : 'rgba(255,255,255,0.08)',
+                            background:  active ? 'rgba(99,102,241,0.22)' : 'rgba(255,255,255,0.03)',
+                            color:       active ? '#818cf8'                : 'rgba(255,255,255,0.28)',
+                            boxShadow:   active ? '0 0 8px rgba(99,102,241,0.22)' : 'none',
+                            touchAction: 'manipulation',
+                          }}
+                          aria-pressed={active}
+                          aria-label={['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][idx]}
+                        >
+                          {label}
+                        </motion.button>
+                      )
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           )}
         </AnimatePresence>

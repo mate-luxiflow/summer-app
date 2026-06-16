@@ -18,8 +18,8 @@ const TODAY_IDX   = new Date().getDay() // 0–6, nem változik a session alatt
 // ── Kezdeti nap-specifikus blokkok (ma) ──────────────────────────────────────
 // Recurring blokkokat materializálja a mai listába, ha még nincsenek benne.
 function getInitialBlocks() {
-  const iso      = todayISO()
-  const saved    = persistence.getRoutine(iso)
+  const iso       = todayISO()
+  const saved     = persistence.getRoutine(iso)  // null = kulcs nem létezik; [] = üres, de volt már mentés
   const recurring = persistence.getRecurring()
 
   // Mai napra érvényes recurring sablonok, "r_" prefixelt id-vel materializálva
@@ -27,22 +27,32 @@ function getInitialBlocks() {
     .filter(b => (b.days ?? []).includes(TODAY_IDX))
     .map(rb => ({ ...rb, id: `r_${rb.id}`, recurring_source_id: rb.id, days: undefined, completed: false }))
 
-  if (saved) {
+  // KRITIKUS: saved !== null ↔ a kulcs létezik a LocalStorage-ban.
+  // Üres tömb [] is érvényes mentett állapot — SOHA nem esünk vissza defaultra.
+  if (saved !== null) {
     const savedIds = new Set(saved.map(b => b.id))
-    // Csak azok a recurring blokkok kerülnek hozzá, amik nincsenek még benne (id alapján)
-    const toMerge = todayRecurring.filter(
+    const toMerge  = todayRecurring.filter(
       rb => !savedIds.has(rb.id) && !savedIds.has(`r_${rb.recurring_source_id}`)
     )
-    const merged = [...saved, ...toMerge]
-    return merged.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
+    return [...saved, ...toMerge].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
   }
 
-  const day     = getTodayDayName()
-  const def     = DEFAULT_WEEKLY_ROUTINES[day] ?? []
-  const defIds  = new Set(def.map(b => b.id))
-  // Default mellé csak azokat a recurring blokkokat adjuk, amik nincsenek benne
-  const toMerge = todayRecurring.filter(rb => !defIds.has(rb.id))
-  return [...def, ...toMerge].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
+  // Nincs mentett állapot a mai napra (pl. napváltás).
+  // Gyári default CSAK az abszolút első indításkor (szűz LocalStorage) töltődik be.
+  const isFirstRun = localStorage.getItem('sg_initialized') === null
+
+  if (isFirstRun) {
+    // Egyetlen alkalommal injektáljuk a gyári sablonokat, majd lezárjuk a kaput.
+    localStorage.setItem('sg_initialized', '1')
+    const day    = getTodayDayName()
+    const def    = DEFAULT_WEEKLY_ROUTINES[day] ?? []
+    const defIds = new Set(def.map(b => b.id))
+    const toMerge = todayRecurring.filter(rb => !defIds.has(rb.id))
+    return [...def, ...toMerge].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
+  }
+
+  // Visszatérő felhasználó, új nap — csak a recurring sablonokat töltjük be.
+  return todayRecurring.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
 }
 
 function getInitialBaseline() {

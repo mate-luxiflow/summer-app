@@ -4,13 +4,10 @@ import XPHeader      from '../components/XPHeader'
 import QuestRow      from '../components/QuestRow'
 import AddQuestBar   from '../components/AddQuestBar'
 import EpicQuestCard from '../components/EpicQuestCard'
-import Heatmap       from '../components/Heatmap'
 import {
-  persistence, todayISO, seedActivityIfEmpty,
+  persistence, todayISO,
   getDefaultPolarity, getTaskXpDelta, getTaskFocusDelta,
 } from '../store'
-
-seedActivityIfEmpty()
 
 let _nextId = Math.max(0, ...persistence.getTasks().map(t => t.id ?? 0)) + 1
 
@@ -200,10 +197,6 @@ export default function Dashboard() {
         )}
       </section>
 
-      {/* 5. Heatmap — alul, bőséges pb a fixed nav miatt */}
-      <div className="border-t border-white/5 mt-2 pb-32">
-        <Heatmap activity={activity} />
-      </div>
     </div>
   )
 }
