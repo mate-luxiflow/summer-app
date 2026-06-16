@@ -2,98 +2,40 @@ import { useState, useEffect, useMemo, memo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import EstimatedFinishBanner from '../components/EstimatedFinishBanner'
 import AddRoutineForm        from '../components/AddRoutineForm'
+import { useAppContext, TODAY_IDX } from '../context/AppContext'
 import {
   CATEGORIES, POLARITY,
   persistence, todayISO,
   getTodayDayName, getWeekdayLabel, getLastOccurrenceISO, getCurrentTimeHHMM,
   DEFAULT_WEEKLY_ROUTINES,
-  cascadeShift, getEstimatedFinish, blockDuration, timeToMinutes, wouldExceedMidnight,
+  getEstimatedFinish, blockDuration, timeToMinutes,
 } from '../store'
 
-// Nap-navigáció konstansok
-const WEEK_SHORT  = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
-const WEEK_FULL   = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-const TODAY_IDX   = new Date().getDay() // 0–6, nem változik a session alatt
+const WEEK_SHORT = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+const WEEK_FULL  = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
-// ── Kezdeti nap-specifikus blokkok (ma) ──────────────────────────────────────
-// Recurring blokkokat materializálja a mai listába, ha még nincsenek benne.
-function getInitialBlocks() {
-  const iso       = todayISO()
-  const saved     = persistence.getRoutine(iso)  // null = kulcs nem létezik; [] = üres, de volt már mentés
-  const recurring = persistence.getRecurring()
-
-  // Mai napra érvényes recurring sablonok, "r_" prefixelt id-vel materializálva
-  const todayRecurring = recurring
-    .filter(b => (b.days ?? []).includes(TODAY_IDX))
-    .map(rb => ({ ...rb, id: `r_${rb.id}`, recurring_source_id: rb.id, days: undefined, completed: false }))
-
-  // KRITIKUS: saved !== null ↔ a kulcs létezik a LocalStorage-ban.
-  // Üres tömb [] is érvényes mentett állapot — SOHA nem esünk vissza defaultra.
-  if (saved !== null) {
-    const savedIds = new Set(saved.map(b => b.id))
-    const toMerge  = todayRecurring.filter(
-      rb => !savedIds.has(rb.id) && !savedIds.has(`r_${rb.recurring_source_id}`)
-    )
-    return [...saved, ...toMerge].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
-  }
-
-  // Nincs mentett állapot a mai napra (pl. napváltás).
-  // Gyári default CSAK az abszolút első indításkor (szűz LocalStorage) töltődik be.
-  const isFirstRun = localStorage.getItem('sg_initialized') === null
-
-  if (isFirstRun) {
-    // Egyetlen alkalommal injektáljuk a gyári sablonokat, majd lezárjuk a kaput.
-    localStorage.setItem('sg_initialized', '1')
-    const day    = getTodayDayName()
-    const def    = DEFAULT_WEEKLY_ROUTINES[day] ?? []
-    const defIds = new Set(def.map(b => b.id))
-    const toMerge = todayRecurring.filter(rb => !defIds.has(rb.id))
-    return [...def, ...toMerge].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
-  }
-
-  // Visszatérő felhasználó, új nap — csak a recurring sablonokat töltjük be.
-  return todayRecurring.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
-}
-
-function getInitialBaseline() {
-  const iso    = todayISO()
-  const stored = persistence.getBaselineFinish(iso)
-  if (stored) return stored
-  const finish = getEstimatedFinish(getInitialBlocks())
-  if (finish) persistence.setBaselineFinish(iso, finish)
-  return finish
-}
-
-// ── Fő komponens ──────────────────────────────────────────────────────────────
 export default function DailyRoutine() {
+  const {
+    blocks, recurringBlocks, baselineFinish,
+    setBaselineFinish, _setBlocksDirect,
+    cascadeBlock, toggleBlock, deleteBlock, deleteRecurring,
+    addBlock, addRecurring,
+  } = useAppContext()
+
   const iso       = todayISO()
   const todayName = getTodayDayName()
 
-  // ── Nap-specifikus állapot (mai nap, szerkeszthető) ──────────────────────
-  const [blocks,         setBlocks]         = useState(getInitialBlocks)
-  const [baselineFinish, setBaselineFinish] = useState(getInitialBaseline)
-  const [currentTime,    setCurrentTime]    = useState(getCurrentTimeHHMM)
-
-  // ── Ismétlődő sablonok állapota ──────────────────────────────────────────
-  const [recurringBlocks, setRecurringBlocks] = useState(() => persistence.getRecurring())
-
-  // ── Napválasztó (0–6) ────────────────────────────────────────────────────
+  // Local UI state — not shared, fine to stay here
   const [selectedDayIdx, setSelectedDayIdx] = useState(TODAY_IDX)
+  const [currentTime,    setCurrentTime]    = useState(getCurrentTimeHHMM)
   const isToday = selectedDayIdx === TODAY_IDX
 
-  // Idő 30mp-enként frissül
   useEffect(() => {
     const id = setInterval(() => setCurrentTime(getCurrentTimeHHMM()), 30_000)
     return () => clearInterval(id)
   }, [])
 
-  // Lokális perzisztencia — csak a mai nap-specifikus blokkokat menti
-  useEffect(() => { persistence.setRoutine(iso, blocks) }, [blocks, iso])
-  useEffect(() => { persistence.setRecurring(recurringBlocks) }, [recurringBlocks])
-
-  // ── Megjelenített blokkok kalkulációja ───────────────────────────────────
-  // Ha mai nap: a nap-specifikus blocks (tartalmazza a materializált recurring-eket is)
-  // Ha más nap: a recurring sablonok szűrve az adott napra (read-only preview)
+  // ── Computed view ─────────────────────────────────────────────────────────
   const viewBlocks = useMemo(() => {
     if (isToday) return blocks
     return recurringBlocks
@@ -107,62 +49,26 @@ export default function DailyRoutine() {
     return Math.max(0, timeToMinutes(estimatedFinish) - timeToMinutes(baselineFinish))
   }, [estimatedFinish, baselineFinish])
 
-  // ── Kaszkád (csak mai nap) ───────────────────────────────────────────────
+  // ── Handlers (wrap context ops with local isToday check) ─────────────────
   const handleCascade = useCallback((blockId, deltaMinutes) => {
     if (!isToday) return
-    if (wouldExceedMidnight(blocks, blockId, deltaMinutes)) return
-    setBlocks(prev => cascadeShift(prev, blockId, deltaMinutes))
-  }, [blocks, isToday])
+    cascadeBlock(blockId, deltaMinutes)
+  }, [isToday, cascadeBlock])
 
-  // ── Toggle (csak mai nap) ────────────────────────────────────────────────
   const handleToggle = useCallback((blockId) => {
     if (!isToday) return
-    setBlocks(prev => prev.map(b =>
-      b.id === blockId ? { ...b, completed: !b.completed } : b
-    ))
-  }, [isToday])
+    toggleBlock(blockId)
+  }, [isToday, toggleBlock])
 
-  // ── Törlés ───────────────────────────────────────────────────────────────
-  // Mai nap: a nap-specifikus listából töröl (recurring sablon megmarad)
-  // Más nap (preview): a recurring sablon listából töröl (az összes napot érinti)
   const handleDeleteBlock = useCallback((blockId) => {
     if (isToday) {
-      setBlocks(prev => prev.filter(b => b.id !== blockId))
+      deleteBlock(blockId)
     } else {
-      setRecurringBlocks(prev => prev.filter(b => b.id !== blockId))
+      deleteRecurring(blockId)
     }
-  }, [isToday])
+  }, [isToday, deleteBlock, deleteRecurring])
 
-  // ── Új one-time blokk hozzáadása (AddRoutineForm → mai nap) ─────────────
-  function handleAddBlock(newBlock) {
-    setBlocks(prev => {
-      const updated = [...prev, newBlock]
-      updated.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
-      return updated
-    })
-  }
-
-  // ── Recurring sablon hozzáadása ──────────────────────────────────────────
-  function handleAddRecurring(newBlock) {
-    setRecurringBlocks(prev => [...prev, newBlock])
-
-    // Ha a mai napra is érvényes: azonnal materializálja a napi listába
-    if ((newBlock.days ?? []).includes(TODAY_IDX)) {
-      const materialized = {
-        ...newBlock,
-        id:                  `r_${newBlock.id}`,
-        recurring_source_id: newBlock.id,
-        days:                undefined,
-        completed:           false,
-      }
-      setBlocks(prev => {
-        if (prev.some(b => b.id === materialized.id)) return prev
-        return [...prev, materialized].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
-      })
-    }
-  }
-
-  // ── Time-Machine ────────────────────────────────────────────────────────
+  // ── Time-Machine ─────────────────────────────────────────────────────────
   function loadLastWeekday() {
     const lastISO = getLastOccurrenceISO(todayName)
     if (!lastISO) return
@@ -170,15 +76,17 @@ export default function DailyRoutine() {
     if (!lastRoutine?.length) return
     const reset  = lastRoutine.map(b => ({ ...b, completed: false }))
     const finish = getEstimatedFinish(reset)
-    setBlocks(reset)
-    setBaselineFinish(finish)
-    if (finish) persistence.setBaselineFinish(iso, finish)
+    _resetBlocks(reset, finish)
   }
 
   function loadDefault() {
     const def    = DEFAULT_WEEKLY_ROUTINES[todayName] ?? []
     const finish = getEstimatedFinish(def)
-    setBlocks(def)
+    _resetBlocks(def, finish)
+  }
+
+  function _resetBlocks(newBlocks, finish) {
+    _setBlocksDirect(newBlocks)
     setBaselineFinish(finish)
     if (finish) persistence.setBaselineFinish(iso, finish)
   }
@@ -189,11 +97,10 @@ export default function DailyRoutine() {
   return (
     <div className="w-full min-h-screen bg-[#0a0a0f]">
 
-      {/* ── Fejléc ──────────────────────────────────────────────────────────── */}
+      {/* ── Header ────────────────────────────────────────────────────────── */}
       <header className="px-4 pt-safe-top border-b border-white/6 bg-[#0a0a0f]/90 backdrop-blur-xl">
         <div className="pt-10 pb-3">
 
-          {/* Nap cím + befejezési idő */}
           <div className="flex items-start justify-between mb-3">
             <div>
               <h1
@@ -204,9 +111,7 @@ export default function DailyRoutine() {
               </h1>
               <p className="text-[10px] font-semibold text-white/28 mt-1.5 tracking-widest uppercase">
                 {isToday ? 'Today' : 'Preview'} · {viewBlocks.length} blocks
-                {!isToday && (
-                  <span className="ml-2 text-amber-500/60">· Read-only</span>
-                )}
+                {!isToday && <span className="ml-2 text-amber-500/60">· Read-only</span>}
               </p>
             </div>
 
@@ -228,7 +133,7 @@ export default function DailyRoutine() {
             )}
           </div>
 
-          {/* ── Napválasztó csúszka (7 chip) ──────────────────────────────── */}
+          {/* Day selector chips */}
           <div
             className="flex gap-1.5 overflow-x-auto mb-3"
             style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
@@ -236,9 +141,8 @@ export default function DailyRoutine() {
             aria-label="Select day"
           >
             {WEEK_SHORT.map((label, idx) => {
-              const isSelected = idx === selectedDayIdx
+              const isSelected  = idx === selectedDayIdx
               const isTodayChip = idx === TODAY_IDX
-
               return (
                 <motion.button
                   key={idx}
@@ -247,7 +151,6 @@ export default function DailyRoutine() {
                   role="tab"
                   aria-selected={isSelected}
                   aria-label={WEEK_FULL[idx]}
-                  // WCAG 2.2: minimum 44×44px touch target
                   className="shrink-0 relative flex flex-col items-center justify-center gap-0.5 rounded-xl border transition-all duration-150"
                   style={{
                     minWidth:    44,
@@ -267,12 +170,11 @@ export default function DailyRoutine() {
                       : isTodayChip
                         ? 'rgba(255,255,255,0.60)'
                         : 'rgba(255,255,255,0.22)',
-                    boxShadow: isSelected ? '0 0 14px rgba(139,92,246,0.30)' : 'none',
+                    boxShadow:   isSelected ? '0 0 14px rgba(139,92,246,0.30)' : 'none',
                     touchAction: 'manipulation',
                   }}
                 >
                   <span className="text-[10px] font-black tracking-wider">{label}</span>
-                  {/* "Ma" pont jelzés */}
                   {isTodayChip && (
                     <div
                       className="w-1 h-1 rounded-full"
@@ -284,7 +186,7 @@ export default function DailyRoutine() {
             })}
           </div>
 
-          {/* Time-Machine gombok — csak mai napnál */}
+          {/* Time-Machine buttons — today only */}
           {isToday && (
             <div className="flex gap-2">
               <motion.button
@@ -297,7 +199,6 @@ export default function DailyRoutine() {
                 Reset Default
               </motion.button>
 
-              {/* 🕒 Load Last [Weekday] */}
               <motion.button
                 whileTap={hasLastWeekday ? { scale: 0.93 } : {}}
                 onClick={hasLastWeekday ? loadLastWeekday : undefined}
@@ -311,7 +212,6 @@ export default function DailyRoutine() {
                   cursor:      hasLastWeekday ? 'pointer'                : 'default',
                   touchAction: 'manipulation',
                 }}
-                title={hasLastWeekday ? undefined : `No saved data for last ${getWeekdayLabel(todayName)}`}
               >
                 <span className="text-[12px]">🕒</span>
                 Load Last {getWeekdayLabel(todayName)}
@@ -321,20 +221,15 @@ export default function DailyRoutine() {
         </div>
       </header>
 
-      {/* ── Preview mode banner (más nap) ────────────────────────────────── */}
+      {/* Preview mode banner */}
       {!isToday && (
         <div
           className="mx-4 mt-3 px-3 py-2 rounded-xl border flex items-center gap-2"
-          style={{
-            background:  'rgba(245,158,11,0.06)',
-            borderColor: 'rgba(245,158,11,0.20)',
-          }}
+          style={{ background: 'rgba(245,158,11,0.06)', borderColor: 'rgba(245,158,11,0.20)' }}
         >
           <span className="text-[13px]">👁</span>
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-amber-500/70">
-              Preview Mode
-            </p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-500/70">Preview Mode</p>
             <p className="text-[9px] text-amber-500/40">
               Showing recurring blocks for {WEEK_FULL[selectedDayIdx]} · Editing disabled
             </p>
@@ -342,23 +237,15 @@ export default function DailyRoutine() {
         </div>
       )}
 
-      {/* ── Estimated Finish Banner (csak mai nap) ────────────────────────── */}
       {isToday && (
-        <EstimatedFinishBanner
-          estimatedFinish={estimatedFinish}
-          delayMinutes={delayMinutes}
-        />
+        <EstimatedFinishBanner estimatedFinish={estimatedFinish} delayMinutes={delayMinutes} />
       )}
 
-      {/* ── Dinamikus blokk hozzáadó form (csak mai nap) ─────────────────── */}
       {isToday && (
-        <AddRoutineForm
-          onAdd={handleAddBlock}
-          onAddRecurring={handleAddRecurring}
-        />
+        <AddRoutineForm onAdd={addBlock} onAddRecurring={addRecurring} />
       )}
 
-      {/* ── Idővonal blokkok ─────────────────────────────────────────────── */}
+      {/* Block timeline */}
       <div className="px-4 pt-3 pb-32">
         {viewBlocks.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -377,7 +264,6 @@ export default function DailyRoutine() {
             const nowMins   = timeToMinutes(currentTime)
             const startMins = timeToMinutes(block.startTime)
             const endMins   = timeToMinutes(block.endTime)
-            // Aktív/lejárt státusz csak mai napnál releváns
             const isActive  = isToday && !block.completed && nowMins >= startMins && nowMins < endMins
             const isPast    = isToday && !block.completed && nowMins >= endMins
 
@@ -401,7 +287,7 @@ export default function DailyRoutine() {
   )
 }
 
-// ── Routine blokk komponens ──────────────────────────────────────────────────
+// ── Routine block card ────────────────────────────────────────────────────────
 const RoutineBlock = memo(function RoutineBlock({
   block, index, isActive, isPast, isToday, onToggle, onCascade, onDelete,
 }) {
@@ -437,7 +323,6 @@ const RoutineBlock = memo(function RoutineBlock({
             : block.completed
               ? 'rgba(255,255,255,0.03)'
               : 'rgba(255,255,255,0.06)',
-          // Preview módban halvány overlay
           opacity: !isToday ? 0.72 : 1,
         }}
         whileTap={isToday ? { scale: 0.988 } : {}}
@@ -447,7 +332,7 @@ const RoutineBlock = memo(function RoutineBlock({
         tabIndex={isToday ? 0 : -1}
         onKeyDown={isToday ? (e => e.key === ' ' && (e.preventDefault(), onToggle())) : undefined}
       >
-        {/* Bal akcentus sáv */}
+        {/* Accent bar */}
         <div className="absolute left-0 top-0 bottom-0 w-0.75"
           style={{
             background: cat.accent,
@@ -456,7 +341,7 @@ const RoutineBlock = memo(function RoutineBlock({
           }}
         />
 
-        {/* Bal oldal: polarity dot + ikon + név */}
+        {/* Left: polarity + icon + name */}
         <div className="pl-5 pr-2 py-3 flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
             <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pol.color }} aria-hidden />
@@ -475,11 +360,9 @@ const RoutineBlock = memo(function RoutineBlock({
             {isPast && !block.completed && (
               <span className="text-[8px] font-bold text-red-400/70 uppercase tracking-widest">Late</span>
             )}
-            {/* Recurring sablon jelzés */}
             {block.recurring_source_id && (
               <span className="text-[8px] text-indigo-400/50 font-bold">🔁</span>
             )}
-            {/* Preview nap jelzés ha más napra néz */}
             {!isToday && block.days && (
               <span className="text-[8px] text-amber-500/50 font-bold">preview</span>
             )}
@@ -492,12 +375,8 @@ const RoutineBlock = memo(function RoutineBlock({
           </p>
         </div>
 
-        {/* Jobb oldal: időintervallum + kaszkád gombok + törlés */}
-        <div
-          className="flex items-center gap-1 pr-1 py-3"
-          onClick={e => e.stopPropagation()}
-        >
-          {/* Időintervallum */}
+        {/* Right: time + cascade + delete */}
+        <div className="flex items-center gap-1 pr-1 py-3" onClick={e => e.stopPropagation()}>
           <div className="text-right mr-1">
             <p className="text-[12px] font-mono font-bold tabular-nums whitespace-nowrap"
               style={{ color: isActive ? cat.accent : 'rgba(255,255,255,0.55)' }}
@@ -507,7 +386,6 @@ const RoutineBlock = memo(function RoutineBlock({
             <p className="text-[10px] text-white/20 tabular-nums">{dur}m</p>
           </div>
 
-          {/* +10m / +20m — csak mai napnál és ha nincs kész */}
           {isToday && !block.completed && (
             <div className="flex flex-col gap-1">
               <CascadeButton label="+10m" onClick={() => onCascade(10)} />
@@ -515,25 +393,15 @@ const RoutineBlock = memo(function RoutineBlock({
             </div>
           )}
 
-          {/* ── Törlés gomb — WCAG 2.2 Mobile: 44×44px touch target ──────────
-               A látható ikon kisebb, de az interakciós zóna teljes 44px.
-               Mobilon mindig látható (nem hover-függő), enyhe vörös tónussal. */}
+          {/* WCAG 2.2: 44×44px touch target, always visible on mobile */}
           <button
             onClick={onDelete}
-            // A negatív margók kompenzálják a 44px-es terület vizuális hatását,
-            // hogy a layout ne törjön szét (a gomb "belenyúl" a padding-ba)
             className="shrink-0 relative flex items-center justify-center rounded-full transition-colors duration-150"
-            style={{
-              width:       44,
-              height:      44,
-              marginRight: -6,
-              touchAction: 'manipulation',
-            }}
+            style={{ width: 44, height: 44, marginRight: -6, touchAction: 'manipulation' }}
             aria-label={`Delete ${block.name}`}
           >
-            {/* Vizuálisan kis ikon — az érintési terület azonban a teljes 44px */}
             <svg
-              className="w-3.5 h-3.5 transition-opacity duration-150"
+              className="w-3.5 h-3.5"
               style={{ color: '#ef4444', opacity: 0.50 }}
               fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
             >
@@ -541,7 +409,6 @@ const RoutineBlock = memo(function RoutineBlock({
             </svg>
           </button>
 
-          {/* Kész checkmark (csak mai nap) */}
           {isToday && block.completed && (
             <motion.div
               initial={{ scale: 0 }}
@@ -560,7 +427,6 @@ const RoutineBlock = memo(function RoutineBlock({
   )
 })
 
-// ── Kaszkád gomb ─────────────────────────────────────────────────────────────
 const CascadeButton = memo(function CascadeButton({ label, onClick }) {
   return (
     <motion.button

@@ -1,28 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import XPHeader      from '../components/XPHeader'
 import QuestRow      from '../components/QuestRow'
 import AddQuestBar   from '../components/AddQuestBar'
 import EpicQuestCard from '../components/EpicQuestCard'
-import {
-  persistence, todayISO,
-  getDefaultPolarity, getTaskXpDelta, getTaskFocusDelta,
-} from '../store'
-
-let _nextId = Math.max(0, ...persistence.getTasks().map(t => t.id ?? 0)) + 1
+import { useAppContext } from '../context/AppContext'
 
 export default function Dashboard() {
-  const [tasks,    setTasks]    = useState(persistence.getTasks)
-  const [totalXp,  setTotalXp]  = useState(persistence.getXp)
-  const [focusMin, setFocusMin] = useState(persistence.getFocusMin)
-  const [activity, setActivity] = useState(persistence.getActivity)
+  const {
+    tasks, totalXp, focusMin, activity,
+    addTask, toggleTask, overridePolarity, deleteTask,
+  } = useAppContext()
 
-  useEffect(() => { persistence.setTasks(tasks) },    [tasks])
-  useEffect(() => { persistence.setXp(totalXp) },     [totalXp])
-  useEffect(() => { persistence.setFocusMin(focusMin) }, [focusMin])
-  useEffect(() => { persistence.setActivity(activity) }, [activity])
-
-  // Egymást követő napos streak
   const streak = (() => {
     let count = 0; const d = new Date()
     for (let i = 0; i < 365; i++) {
@@ -32,75 +21,6 @@ export default function Dashboard() {
     return count
   })()
 
-  function addTask({ text, category, priority, polarity, isEpic = false, dueDate = null, createdDate = null }) {
-    const id = _nextId++
-    const resolvedPolarity = polarity ?? getDefaultPolarity(category)
-    setTasks(prev => [{
-      id, text, category, priority,
-      polarity: resolvedPolarity,
-      completed: false,
-      isEpic,
-      dueDate:     isEpic ? dueDate    : null,
-      createdDate: isEpic ? createdDate : null,
-    }, ...prev])
-  }
-
-  function toggleTask(id) {
-    setTasks(prev => prev.map(t => {
-      if (t.id !== id) return t
-      const polarity = t.polarity ?? 'neutral'
-      const nowDone  = !t.completed
-      const xpDelta    = getTaskXpDelta(polarity)
-      const focusDelta = getTaskFocusDelta(polarity)
-
-      if (nowDone) {
-        setTotalXp(xp  => Math.max(0, xp + xpDelta))
-        setFocusMin(f  => Math.max(0, f + focusDelta))
-        const today = todayISO()
-        setActivity(act => ({ ...act, [today]: (act[today] ?? 0) + 5 }))
-      } else {
-        // Visszavonás: az eredeti XP/focus visszafordul
-        setTotalXp(xp  => Math.max(0, xp - xpDelta))
-        setFocusMin(f  => Math.max(0, f - focusDelta))
-      }
-      return { ...t, completed: nowDone }
-    }))
-  }
-
-  /**
-   * Inline polarity override — ha a task már kész, az XP/focus értékeket
-   * azonnal újraszámolja (régi polaritás visszafordul, új hozzáadódik).
-   */
-  function overridePolarity(id, newPolarity) {
-    setTasks(prev => prev.map(t => {
-      if (t.id !== id) return t
-      const oldPolarity = t.polarity ?? 'neutral'
-      if (oldPolarity === newPolarity) return t
-
-      if (t.completed) {
-        const oldXp    = getTaskXpDelta(oldPolarity)
-        const newXp    = getTaskXpDelta(newPolarity)
-        setTotalXp(xp  => Math.max(0, xp - oldXp + newXp))
-
-        const oldFocus = getTaskFocusDelta(oldPolarity)
-        const newFocus = getTaskFocusDelta(newPolarity)
-        setFocusMin(f  => Math.max(0, f - oldFocus + newFocus))
-      }
-      return { ...t, polarity: newPolarity }
-    }))
-  }
-
-  function deleteTask(id) {
-    setTasks(prev => {
-      const task = prev.find(t => t.id === id)
-      if (task?.completed) {
-        setTotalXp(xp  => Math.max(0, xp - getTaskXpDelta(task.polarity ?? 'neutral')))
-        setFocusMin(f  => Math.max(0, f  - getTaskFocusDelta(task.polarity ?? 'neutral')))
-      }
-      return prev.filter(t => t.id !== id)
-    })
-  }
-
   const epicPending    = tasks.filter(t =>  t.isEpic && !t.completed)
   const regularPending = tasks.filter(t => !t.isEpic && !t.completed)
   const allCompleted   = tasks.filter(t =>  t.completed)
@@ -108,7 +28,6 @@ export default function Dashboard() {
   return (
     <div className="w-full bg-[#0a0a0f]">
 
-      {/* 1. XP fejléc */}
       <XPHeader
         totalXp={totalXp}
         focusMin={focusMin}
@@ -117,10 +36,9 @@ export default function Dashboard() {
         streak={streak}
       />
 
-      {/* 2. Quest hozzáadó sáv — jobbkezes hüvelyk-zónában */}
       <AddQuestBar onAdd={addTask} />
 
-      {/* 3. Epic Quests — pinned, a rendes lista felett ──────────────────── */}
+      {/* Epic Quests — pinned above daily list */}
       <AnimatePresence>
         {epicPending.length > 0 && (
           <motion.section
@@ -131,7 +49,6 @@ export default function Dashboard() {
             className="px-4 pt-3 pb-1 overflow-hidden"
             aria-label="Epic Quests"
           >
-            {/* Section divider */}
             <div className="flex items-center gap-2 mb-2.5">
               <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, #f59e0b40, transparent)' }} />
               <span className="text-[8px] font-black uppercase tracking-[0.15em] text-amber-500/55">
@@ -155,7 +72,7 @@ export default function Dashboard() {
         )}
       </AnimatePresence>
 
-      {/* 4. Daily quest lista — min-h-[50vh] garantálja a görgethetőséget ── */}
+      {/* Daily Quest list — min-h-[50vh] preserves scroll space above bottom nav */}
       <section className="px-4 pt-3 pb-2 min-h-[50vh]" aria-label="Daily Quests">
         {tasks.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -196,12 +113,10 @@ export default function Dashboard() {
           />
         )}
       </section>
-
     </div>
   )
 }
 
-// ── Teljesített szekció ────────────────────────────────────────────────────────
 function CompletedSection({ tasks, onToggle, onDelete, onPolarityChange }) {
   const [open, setOpen] = useState(false)
 
