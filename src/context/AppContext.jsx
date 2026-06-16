@@ -78,107 +78,135 @@ export function AppContextProvider({ children }) {
   const [recurringBlocks, setRecurringBlocks] = useState(() => persistence.getRecurring())
   const [baselineFinish,  setBaselineFinish]  = useState(buildInitialBaseline)
 
-  // ── Sync to localStorage (provider never unmounts → no race condition) ────
-  useEffect(() => { persistence.setTasks(tasks) },           [tasks])
-  useEffect(() => { persistence.setXp(totalXp) },            [totalXp])
-  useEffect(() => { persistence.setFocusMin(focusMin) },     [focusMin])
-  useEffect(() => { persistence.setActivity(activity) },     [activity])
-  useEffect(() => { persistence.setRoutine(iso, blocks) },   [blocks, iso])
-  useEffect(() => { persistence.setRecurring(recurringBlocks) }, [recurringBlocks])
+  // ── Belt-and-suspenders useEffect syncs (covers _setBlocksDirect) ─────────
+  // Primary persistence is synchronous inside each action below.
+  // These are a fallback only — do NOT rely on them for correctness.
+  useEffect(() => { persistence.setRoutine(iso, blocks) },          [blocks, iso])
+  useEffect(() => { persistence.setRecurring(recurringBlocks) },    [recurringBlocks])
 
-  // ── Quest operations ──────────────────────────────────────────────────────
+  // ── Quest operations — each action writes to localStorage synchronously ────
   const addTask = useCallback(({
     text, category, priority, polarity,
     isEpic = false, dueDate = null, createdDate = null,
   }) => {
     const id               = _nextTaskId++
     const resolvedPolarity = polarity ?? getDefaultPolarity(category)
-    setTasks(prev => [{
-      id, text, category, priority,
-      polarity:    resolvedPolarity,
-      completed:   false,
-      isEpic,
-      dueDate:     isEpic ? dueDate     : null,
-      createdDate: isEpic ? createdDate : null,
-    }, ...prev])
+    setTasks(prev => {
+      const next = [{
+        id, text, category, priority,
+        polarity:    resolvedPolarity,
+        completed:   false,
+        isEpic,
+        dueDate:     isEpic ? dueDate     : null,
+        createdDate: isEpic ? createdDate : null,
+      }, ...prev]
+      persistence.setTasks(next)
+      return next
+    })
   }, [])
 
   const toggleTask = useCallback((id) => {
-    setTasks(prev => prev.map(t => {
-      if (t.id !== id) return t
-      const polarity   = t.polarity ?? 'neutral'
-      const nowDone    = !t.completed
-      const xpDelta    = getTaskXpDelta(polarity)
-      const focusDelta = getTaskFocusDelta(polarity)
-
-      if (nowDone) {
-        setTotalXp(xp => Math.max(0, xp + xpDelta))
-        setFocusMin(f  => Math.max(0, f  + focusDelta))
-        const today = todayISO()
-        setActivity(act => ({ ...act, [today]: (act[today] ?? 0) + 5 }))
-      } else {
-        setTotalXp(xp => Math.max(0, xp - xpDelta))
-        setFocusMin(f  => Math.max(0, f  - focusDelta))
-      }
-      return { ...t, completed: nowDone }
-    }))
+    setTasks(prev => {
+      const next = prev.map(t => {
+        if (t.id !== id) return t
+        const polarity   = t.polarity ?? 'neutral'
+        const nowDone    = !t.completed
+        const xpDelta    = getTaskXpDelta(polarity)
+        const focusDelta = getTaskFocusDelta(polarity)
+        if (nowDone) {
+          setTotalXp(xp => { const n = Math.max(0, xp + xpDelta); persistence.setXp(n); return n })
+          setFocusMin(f  => { const n = Math.max(0, f + focusDelta); persistence.setFocusMin(n); return n })
+          const today = todayISO()
+          setActivity(act => { const n = { ...act, [today]: (act[today] ?? 0) + 5 }; persistence.setActivity(n); return n })
+        } else {
+          setTotalXp(xp => { const n = Math.max(0, xp - xpDelta); persistence.setXp(n); return n })
+          setFocusMin(f  => { const n = Math.max(0, f - focusDelta); persistence.setFocusMin(n); return n })
+        }
+        return { ...t, completed: nowDone }
+      })
+      persistence.setTasks(next)
+      return next
+    })
   }, [])
 
   const overridePolarity = useCallback((id, newPolarity) => {
-    setTasks(prev => prev.map(t => {
-      if (t.id !== id) return t
-      const oldPolarity = t.polarity ?? 'neutral'
-      if (oldPolarity === newPolarity) return t
-
-      if (t.completed) {
-        setTotalXp(xp => Math.max(0, xp - getTaskXpDelta(oldPolarity) + getTaskXpDelta(newPolarity)))
-        setFocusMin(f  => Math.max(0, f  - getTaskFocusDelta(oldPolarity) + getTaskFocusDelta(newPolarity)))
-      }
-      return { ...t, polarity: newPolarity }
-    }))
+    setTasks(prev => {
+      const next = prev.map(t => {
+        if (t.id !== id) return t
+        const oldPolarity = t.polarity ?? 'neutral'
+        if (oldPolarity === newPolarity) return t
+        if (t.completed) {
+          setTotalXp(xp => { const n = Math.max(0, xp - getTaskXpDelta(oldPolarity) + getTaskXpDelta(newPolarity)); persistence.setXp(n); return n })
+          setFocusMin(f  => { const n = Math.max(0, f - getTaskFocusDelta(oldPolarity) + getTaskFocusDelta(newPolarity)); persistence.setFocusMin(n); return n })
+        }
+        return { ...t, polarity: newPolarity }
+      })
+      persistence.setTasks(next)
+      return next
+    })
   }, [])
 
   const deleteTask = useCallback((id) => {
     setTasks(prev => {
       const task = prev.find(t => t.id === id)
       if (task?.completed) {
-        setTotalXp(xp => Math.max(0, xp - getTaskXpDelta(task.polarity ?? 'neutral')))
-        setFocusMin(f  => Math.max(0, f  - getTaskFocusDelta(task.polarity ?? 'neutral')))
+        setTotalXp(xp => { const n = Math.max(0, xp - getTaskXpDelta(task.polarity ?? 'neutral')); persistence.setXp(n); return n })
+        setFocusMin(f  => { const n = Math.max(0, f - getTaskFocusDelta(task.polarity ?? 'neutral')); persistence.setFocusMin(n); return n })
       }
-      return prev.filter(t => t.id !== id)
+      const next = prev.filter(t => t.id !== id)
+      persistence.setTasks(next)
+      return next
     })
   }, [])
 
-  // ── Routine operations ────────────────────────────────────────────────────
+  // ── Routine operations — each action writes to localStorage synchronously ──
   const cascadeBlock = useCallback((blockId, deltaMinutes) => {
     setBlocks(prev => {
       if (wouldExceedMidnight(prev, blockId, deltaMinutes)) return prev
-      return cascadeShift(prev, blockId, deltaMinutes)
+      const next = cascadeShift(prev, blockId, deltaMinutes)
+      persistence.setRoutine(iso, next)
+      return next
+    })
+  }, [iso])
+
+  const toggleBlock = useCallback((blockId) => {
+    setBlocks(prev => {
+      const next = prev.map(b => b.id === blockId ? { ...b, completed: !b.completed } : b)
+      persistence.setRoutine(iso, next)
+      return next
+    })
+  }, [iso])
+
+  const deleteBlock = useCallback((blockId) => {
+    setBlocks(prev => {
+      const next = prev.filter(b => b.id !== blockId)
+      persistence.setRoutine(iso, next)
+      return next
+    })
+  }, [iso])
+
+  const deleteRecurring = useCallback((blockId) => {
+    setRecurringBlocks(prev => {
+      const next = prev.filter(b => b.id !== blockId)
+      persistence.setRecurring(next)
+      return next
     })
   }, [])
 
-  const toggleBlock = useCallback((blockId) => {
-    setBlocks(prev => prev.map(b =>
-      b.id === blockId ? { ...b, completed: !b.completed } : b
-    ))
-  }, [])
-
-  const deleteBlock = useCallback((blockId) => {
-    setBlocks(prev => prev.filter(b => b.id !== blockId))
-  }, [])
-
-  const deleteRecurring = useCallback((blockId) => {
-    setRecurringBlocks(prev => prev.filter(b => b.id !== blockId))
-  }, [])
-
   const addBlock = useCallback((newBlock) => {
-    setBlocks(prev =>
-      [...prev, newBlock].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
-    )
-  }, [])
+    setBlocks(prev => {
+      const next = [...prev, newBlock].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
+      persistence.setRoutine(iso, next)
+      return next
+    })
+  }, [iso])
 
   const addRecurring = useCallback((newBlock) => {
-    setRecurringBlocks(prev => [...prev, newBlock])
+    setRecurringBlocks(prev => {
+      const next = [...prev, newBlock]
+      persistence.setRecurring(next)
+      return next
+    })
     if ((newBlock.days ?? []).includes(TODAY_IDX)) {
       const materialized = {
         ...newBlock,
@@ -189,10 +217,12 @@ export function AppContextProvider({ children }) {
       }
       setBlocks(prev => {
         if (prev.some(b => b.id === materialized.id)) return prev
-        return [...prev, materialized].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
+        const next = [...prev, materialized].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
+        persistence.setRoutine(iso, next)
+        return next
       })
     }
-  }, [])
+  }, [iso])
 
   const value = {
     // Quest
