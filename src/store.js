@@ -251,6 +251,10 @@ export const persistence = {
   // days: 0=Vasárnap, 1=Hétfő, 2=Kedd, 3=Szerda, 4=Csütörtök, 5=Péntek, 6=Szombat
   getRecurring:      () => load('sg_recurring', []),
   setRecurring:      v  => localStorage.setItem('sg_recurring', JSON.stringify(v)),
+  // Per-day tombstones: materialized recurring IDs (r_xxx) the user explicitly deleted from today.
+  // Prevents buildInitialBlocks from re-injecting them on every subsequent app load.
+  getExcludedRecurring: iso => load(`sg_excl_rec_${iso}`, []),
+  setExcludedRecurring: (iso, ids) => localStorage.setItem(`sg_excl_rec_${iso}`, JSON.stringify(ids)),
 }
 
 // ── Dátum-segédletek ──────────────────────────────────────────────────────────

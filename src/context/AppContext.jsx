@@ -32,9 +32,12 @@ function buildInitialBlocks() {
 
   // saved !== null means the key exists — even [] is a valid "empty day" state
   if (saved !== null) {
-    const savedIds = new Set(saved.map(b => b.id))
-    const toMerge  = todayRecurring.filter(
-      rb => !savedIds.has(rb.id) && !savedIds.has(`r_${rb.recurring_source_id}`)
+    const savedIds    = new Set(saved.map(b => b.id))
+    // excludedIds: materialized recurring blocks the user explicitly deleted from today.
+    // Without this, buildInitialBlocks re-injects them on every reload (ghost-data bug).
+    const excludedIds = new Set(persistence.getExcludedRecurring(iso))
+    const toMerge     = todayRecurring.filter(
+      rb => !savedIds.has(rb.id) && !excludedIds.has(rb.id)
     )
     return [...saved, ...toMerge].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
   }
@@ -179,6 +182,15 @@ export function AppContextProvider({ children }) {
 
   const deleteBlock = useCallback((blockId) => {
     setBlocks(prev => {
+      const block = prev.find(b => b.id === blockId)
+      // Materialized recurring block deleted from today's view → write tombstone so
+      // buildInitialBlocks never re-injects it on subsequent loads for this date.
+      if (block?.recurring_source_id) {
+        const current = persistence.getExcludedRecurring(iso)
+        if (!current.includes(blockId)) {
+          persistence.setExcludedRecurring(iso, [...current, blockId])
+        }
+      }
       const next = prev.filter(b => b.id !== blockId)
       persistence.setRoutine(iso, next)
       return next
