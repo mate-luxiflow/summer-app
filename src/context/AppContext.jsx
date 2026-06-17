@@ -72,6 +72,9 @@ export function AppContextProvider({ children }) {
   const [recurringBlocks, setRecurringBlocks] = useState(() => persistence.getRecurring())
   const [baselineFinish,  setBaselineFinish]  = useState(buildInitialBaseline)
 
+  const [storeMinutes,  setStoreMinutes]  = useState(persistence.getStoreMinutes)
+  const [journalSealed, setJournalSealed] = useState(() => persistence.getJournalClaimed(iso))
+
   const [toast, setToast] = useState(null)
   const dismissToast = useCallback(() => setToast(null), [])
 
@@ -251,6 +254,21 @@ export function AppContextProvider({ children }) {
     })
   }, [])
 
+  const saveDailyLog = useCallback((text) => {
+    const trimmed = text.trim()
+    if (trimmed.length < 5) return
+    persistence.setDailyLog(iso, trimmed)
+    if (!persistence.getJournalClaimed(iso)) {
+      persistence.setJournalClaimed(iso)
+      setJournalSealed(true)
+      setStoreMinutes(m => {
+        const n = m + 10
+        persistence.setStoreMinutes(n)
+        return n
+      })
+    }
+  }, [iso])
+
   const addBlock = useCallback((newBlock) => {
     setBlocks(prev => {
       const next = [...prev, newBlock].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
@@ -305,6 +323,8 @@ export function AppContextProvider({ children }) {
     _setBlocksDirect: setBlocks,
     cascadeBlock, toggleBlock, deleteBlock, deleteRecurring,
     addBlock, addRecurring, updateRoutineBlock,
+    // Journal & Store Minutes
+    storeMinutes, journalSealed, saveDailyLog,
     // Toast
     toast, dismissToast,
   }

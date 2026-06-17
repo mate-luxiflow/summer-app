@@ -327,6 +327,14 @@ export const persistence = {
   // Retroaktív auto-claim tombstone (megakadályozza a kétszeres jóváírást)
   getAutoClaim: iso => localStorage.getItem(`sg_autoclaim_${iso}`) === '1',
   setAutoClaim: iso => localStorage.setItem(`sg_autoclaim_${iso}`, '1'),
+  // Napi napló (Daily Journal) — szöveg per nap
+  getDailyLog: iso => load(`sg_journal_${iso}`, ''),
+  setDailyLog: (iso, text) => localStorage.setItem(`sg_journal_${iso}`, JSON.stringify(text)),
+  getJournalClaimed: iso => localStorage.getItem(`sg_journal_claimed_${iso}`) === '1',
+  setJournalClaimed: iso => localStorage.setItem(`sg_journal_claimed_${iso}`, '1'),
+  // Store Minutes egyenleg
+  getStoreMinutes: () => { const n = Number(localStorage.getItem('sg_store_min')); return isFinite(n) ? n : 0 },
+  setStoreMinutes: v  => localStorage.setItem('sg_store_min', String(Math.max(0, Math.round(v)))),
 }
 
 // ── Dátum-segédletek ──────────────────────────────────────────────────────────

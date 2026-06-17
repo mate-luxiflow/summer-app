@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppContext } from '../context/AppContext'
 import {
@@ -378,6 +378,11 @@ function DayView({ stats }) {
           </p>
         </div>
       )}
+
+      {/* Daily Journal Folder */}
+      <div className="mt-5">
+        <DailyJournalFolder />
+      </div>
     </div>
   )
 }
@@ -505,6 +510,171 @@ function TrendView({ trendStats, trendDelta, trend30Total }) {
         </div>
       </div>
     </div>
+  )
+}
+
+// ── Daily Journal Folder ───────────────────────────────────────────────────────
+function DailyJournalFolder() {
+  const { journalSealed, saveDailyLog } = useAppContext()
+  const [open, setOpen]   = useState(false)
+  const [text, setText]   = useState(() => persistence.getDailyLog(todayISO()))
+  const textareaRef       = useRef(null)
+
+  const formattedDate = new Date().toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+  })
+
+  useEffect(() => {
+    if (open) {
+      setTimeout(() => textareaRef.current?.focus(), 120)
+    }
+  }, [open])
+
+  function handleSave() {
+    if (text.trim().length < 5) return
+    saveDailyLog(text)
+    setOpen(false)
+  }
+
+  const canSave = text.trim().length >= 5
+
+  return (
+    <>
+      {/* ── Compact folder card ── */}
+      <motion.button
+        onClick={() => setOpen(true)}
+        whileTap={{ scale: 0.97 }}
+        className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl border transition-all duration-200 text-left"
+        style={{
+          background:   journalSealed ? 'rgba(34,197,94,0.07)' : 'rgba(255,255,255,0.03)',
+          borderColor:  journalSealed ? 'rgba(34,197,94,0.28)' : 'rgba(255,255,255,0.08)',
+          touchAction:  'manipulation',
+        }}
+        aria-label="Open daily journal"
+      >
+        <span className="text-xl shrink-0" aria-hidden>
+          {journalSealed ? '📗' : '📂'}
+        </span>
+        <div className="flex-1 min-w-0">
+          <p
+            className="text-[12px] font-black uppercase tracking-wider"
+            style={{ color: journalSealed ? '#22c55e' : 'rgba(255,255,255,0.55)' }}
+          >
+            {journalSealed ? '✓ File Sealed · +10m' : 'Daily Reflection File'}
+          </p>
+          <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.22)' }}>
+            {journalSealed ? "Today's reflection is logged" : 'Tap to open · earn +10 Store Min'}
+          </p>
+        </div>
+        {!journalSealed && (
+          <svg
+            className="w-4 h-4 shrink-0"
+            style={{ color: 'rgba(255,255,255,0.16)' }}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        )}
+      </motion.button>
+
+      {/* ── Full-screen bottom drawer ── */}
+      <AnimatePresence>
+        {open && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.20 }}
+              className="fixed inset-0 z-50"
+              style={{ background: 'rgba(0,0,0,0.80)', backdropFilter: 'blur(10px)' }}
+              onClick={() => setOpen(false)}
+            />
+
+            {/* Sheet */}
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 340, damping: 36 }}
+              className="fixed inset-x-0 bottom-0 z-50 rounded-t-3xl"
+              style={{
+                background:   '#0d0d1a',
+                border:       '1px solid rgba(255,255,255,0.09)',
+                borderBottom: 'none',
+                paddingBottom: 'env(safe-area-inset-bottom, 20px)',
+              }}
+            >
+              {/* Drag handle */}
+              <div className="w-10 h-1 rounded-full mx-auto mt-3 mb-5"
+                style={{ background: 'rgba(255,255,255,0.12)' }} />
+
+              <div className="px-5 pb-6">
+                {/* Header row */}
+                <div className="flex items-start justify-between mb-5">
+                  <div>
+                    <p className="text-[16px] font-black text-white tracking-tight">Daily Reflection</p>
+                    <p className="text-[11px] mt-0.5 font-medium" style={{ color: 'rgba(255,255,255,0.28)' }}>
+                      {formattedDate}
+                    </p>
+                  </div>
+                  {!journalSealed && (
+                    <div
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl"
+                      style={{ background: 'rgba(34,197,94,0.10)', border: '1px solid rgba(34,197,94,0.28)' }}
+                    >
+                      <span className="text-[11px] font-black" style={{ color: '#22c55e' }}>+10m</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Textarea */}
+                <textarea
+                  ref={textareaRef}
+                  value={text}
+                  onChange={e => setText(e.target.value)}
+                  placeholder="How did today go? What did you grind on? What will you change tomorrow?"
+                  rows={7}
+                  className="w-full rounded-2xl p-4 text-[14px] leading-[1.65] resize-none outline-none"
+                  style={{
+                    background:  'rgba(255,255,255,0.04)',
+                    border:      '1px solid rgba(255,255,255,0.08)',
+                    color:       'rgba(255,255,255,0.85)',
+                    caretColor:  '#22c55e',
+                  }}
+                />
+
+                {/* Char hint */}
+                {!canSave && text.length > 0 && (
+                  <p className="text-[10px] mt-1.5 text-right" style={{ color: 'rgba(255,255,255,0.20)' }}>
+                    {5 - text.trim().length} more chars to unlock
+                  </p>
+                )}
+
+                {/* Save button */}
+                <motion.button
+                  onClick={handleSave}
+                  disabled={!canSave}
+                  whileTap={{ scale: canSave ? 0.95 : 1 }}
+                  className="w-full mt-4 py-3.5 rounded-2xl font-black text-[14px] text-white transition-all duration-200 disabled:opacity-25"
+                  style={{
+                    background: canSave
+                      ? 'linear-gradient(135deg, #22c55e, #16a34a)'
+                      : 'rgba(255,255,255,0.07)',
+                    boxShadow: canSave ? '0 4px 22px rgba(34,197,94,0.32)' : 'none',
+                    touchAction: 'manipulation',
+                  }}
+                  aria-label="Save journal entry"
+                >
+                  {journalSealed ? 'Update Reflection' : 'Seal the File · +10m'}
+                </motion.button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </>
   )
 }
 
