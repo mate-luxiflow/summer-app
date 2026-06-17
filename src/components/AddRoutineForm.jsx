@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ROUTINE_BEHAVIOR_TYPES, getBlockType, timeToMinutes } from '../store'
 
-const BEHAVIOR_ENTRIES = Object.entries(ROUTINE_BEHAVIOR_TYPES)
-
 const DAY_PRESETS = [
   { key: 'everyday', label: 'Everyday', days: [0, 1, 2, 3, 4, 5, 6] },
   { key: 'weekdays', label: 'Weekdays', days: [1, 2, 3, 4, 5] },
@@ -154,42 +152,6 @@ export default function AddRoutineForm({
             Cancel
           </motion.button>
         )}
-      </div>
-
-      {/* 3-type behavior selector */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
-        {BEHAVIOR_ENTRIES.map(([key, bt]) => {
-          const selected = behaviorType === key
-          return (
-            <motion.button
-              key={key}
-              whileTap={{ scale: 0.93 }}
-              onClick={() => setBehaviorType(key)}
-              className="flex flex-col items-center gap-1 py-2.5 rounded-xl border transition-all duration-200"
-              style={{
-                borderColor: selected ? bt.border : 'rgba(255,255,255,0.07)',
-                background:  selected ? bt.bg     : 'rgba(255,255,255,0.02)',
-                boxShadow:   selected ? `0 0 16px ${bt.glow}` : 'none',
-                touchAction: 'manipulation',
-              }}
-              aria-pressed={selected}
-            >
-              <span className="text-[18px] leading-none">{bt.icon}</span>
-              <span
-                className="text-[9px] font-black uppercase tracking-wider leading-none"
-                style={{ color: selected ? bt.accent : 'rgba(255,255,255,0.30)' }}
-              >
-                {bt.label}
-              </span>
-              <span
-                className="text-[7px] text-center leading-tight px-1"
-                style={{ color: selected ? bt.accent + 'cc' : 'rgba(255,255,255,0.18)' }}
-              >
-                {bt.desc}
-              </span>
-            </motion.button>
-          )
-        })}
       </div>
 
       {/* Recurring toggle + day selector */}

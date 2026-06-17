@@ -5,11 +5,10 @@ export const STORE_MINUTES_PER_TASK = 10 // focus perc pozitív taskonként
 
 // ── Rank table ────────────────────────────────────────────────────────────────
 export const RANKS = [
-  { minLevel: 1,  label: 'Summer Novice',      color: '#94a3b8' },
-  { minLevel: 4,  label: 'Consistency King',   color: '#f97316' },
-  { minLevel: 8,  label: 'Productive Grinder', color: '#ec4899' },
-  { minLevel: 16, label: 'Focus Master',       color: '#8b5cf6' },
-  { minLevel: 30, label: 'Summer Legend',      color: '#06b6d4' },
+  { minLevel: 1,  label: 'Novice Cutter',       color: '#94a3b8' },
+  { minLevel: 4,  label: 'Focus Disciple',       color: '#f97316' },
+  { minLevel: 7,  label: 'Time Alchemist',       color: '#ec4899' },
+  { minLevel: 10, label: 'Grandmaster Grinder',  color: '#8b5cf6' },
 ]
 
 // ── Category registry ─────────────────────────────────────────────────────────

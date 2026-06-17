@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppContext } from '../context/AppContext'
 import {
-  ROUTINE_BEHAVIOR_TYPES, getBlockType,
+  getBlockType,
   persistence, todayISO, blockDuration, timeToMinutes, lastNDays,
 } from '../store'
 
@@ -54,6 +54,7 @@ function computeDayStats(blocks) {
 // ── Hourly bar chart ───────────────────────────────────────────────────────────
 function HourlyChart({ hourlyData }) {
   const W = 320, H = 72, baseline = H, maxBarH = 60
+  const scale = maxBarH / 60
 
   return (
     <div>
@@ -63,7 +64,6 @@ function HourlyChart({ hourlyData }) {
         style={{ height: H, overflow: 'visible' }}
         preserveAspectRatio="none"
       >
-        {/* Subtle grid lines */}
         {[0.5, 1].map((pct, i) => (
           <line
             key={i}
@@ -74,43 +74,32 @@ function HourlyChart({ hourlyData }) {
         ))}
 
         {hourlyData.map((d, i) => {
-          const slotW  = W / 24
-          const barW   = slotW * 0.60
-          const x      = i * slotW + (slotW - barW) / 2
-          const posNeu = d.positive + d.neutral
-          const neg    = d.negative
-          const total  = posNeu + neg
+          const slotW = W / 24
+          const barW  = slotW * 0.60
+          const x     = i * slotW + (slotW - barW) / 2
+          const total = d.positive + d.neutral + d.negative
 
           if (total === 0) {
             return (
-              <rect
-                key={i}
-                x={x} y={baseline - 4}
-                width={barW} height={4}
-                rx={1}
-                fill="rgba(255,255,255,0.06)"
-              />
+              <rect key={i} x={x} y={baseline - 4} width={barW} height={4} rx={1} fill="rgba(255,255,255,0.06)" />
             )
           }
 
-          const posNeuH = Math.min(maxBarH, (posNeu / 60) * maxBarH)
-          const negH    = Math.min(maxBarH - posNeuH, (neg / 60) * maxBarH)
+          // Stack bottom→top: Positive (green) → Neutral (grey) → Negative (purple)
+          const posH = d.positive * scale
+          const neuH = d.neutral  * scale
+          const negH = d.negative * scale
 
           return (
             <g key={i}>
-              {posNeuH > 0 && (
-                <rect
-                  x={x} y={baseline - posNeuH - negH}
-                  width={barW} height={posNeuH}
-                  rx={1.5} fill="#06b6d4" opacity={0.88}
-                />
+              {posH > 0 && (
+                <rect x={x} y={baseline - posH - neuH - negH} width={barW} height={posH} rx={1.5} fill="#10b981" opacity={0.90} />
+              )}
+              {neuH > 0 && (
+                <rect x={x} y={baseline - neuH - negH} width={barW} height={neuH} rx={1.5} fill="#64748b" opacity={0.85} />
               )}
               {negH > 0 && (
-                <rect
-                  x={x} y={baseline - negH}
-                  width={barW} height={negH}
-                  rx={1.5} fill="#a855f7" opacity={0.88}
-                />
+                <rect x={x} y={baseline - negH} width={barW} height={negH} rx={1.5} fill="#a855f7" opacity={0.90} />
               )}
             </g>
           )
@@ -149,8 +138,8 @@ function HourlyChart({ hourlyData }) {
 // ── Weekly column chart ────────────────────────────────────────────────────────
 function WeeklyChart({ weekData }) {
   const W = 280, H = 88, baseline = H, maxBarH = 72
-  const colW = W / 7
-  const barW = colW * 0.52
+  const colW   = W / 7
+  const barW   = colW * 0.52
   const maxVal = Math.max(...weekData.map(d => d.positive + d.neutral + d.negative), 60)
 
   const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
@@ -164,40 +153,32 @@ function WeeklyChart({ weekData }) {
         preserveAspectRatio="none"
       >
         {weekData.map((d, i) => {
-          const x      = i * colW + (colW - barW) / 2
-          const posNeu = d.positive + d.neutral
-          const neg    = d.negative
-          const total  = posNeu + neg
+          const x     = i * colW + (colW - barW) / 2
+          const total = d.positive + d.neutral + d.negative
 
           if (total === 0 || d.isFuture) {
             return (
-              <rect
-                key={i}
-                x={x} y={baseline - 18}
-                width={barW} height={18}
-                rx={4} fill="rgba(255,255,255,0.05)"
-              />
+              <rect key={i} x={x} y={baseline - 18} width={barW} height={18} rx={4} fill="rgba(255,255,255,0.05)" />
             )
           }
 
-          const posNeuH = Math.min(maxBarH, (posNeu / maxVal) * maxBarH)
-          const negH    = Math.min(maxBarH - posNeuH, (neg / maxVal) * maxBarH)
+          // Proportional stacking to fill the scaled total bar height
+          const totalH = Math.min(maxBarH, (total / maxVal) * maxBarH)
+          const posH   = (d.positive / total) * totalH
+          const neuH   = (d.neutral  / total) * totalH
+          const negH   = (d.negative / total) * totalH
+          const alpha  = d.isToday ? 1 : 0.75
 
           return (
             <g key={i}>
-              {posNeuH > 0 && (
-                <rect
-                  x={x} y={baseline - posNeuH - negH}
-                  width={barW} height={posNeuH}
-                  rx={4} fill="#2563eb" opacity={d.isToday ? 1 : 0.75}
-                />
+              {posH > 0 && (
+                <rect x={x} y={baseline - posH - neuH - negH} width={barW} height={posH} rx={4} fill="#10b981" opacity={alpha} />
+              )}
+              {neuH > 0 && (
+                <rect x={x} y={baseline - neuH - negH} width={barW} height={neuH} rx={4} fill="#64748b" opacity={alpha} />
               )}
               {negH > 0 && (
-                <rect
-                  x={x} y={baseline - negH}
-                  width={barW} height={negH}
-                  rx={4} fill="#a855f7" opacity={d.isToday ? 1 : 0.75}
-                />
+                <rect x={x} y={baseline - negH} width={barW} height={negH} rx={4} fill="#a855f7" opacity={alpha} />
               )}
             </g>
           )
@@ -333,15 +314,13 @@ function DayView({ stats }) {
             style={{ color: 'rgba(255,255,255,0.25)' }}>
             Hourly Breakdown
           </p>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full" style={{ background: '#06b6d4' }} />
-              <span className="text-[8px] font-bold" style={{ color: 'rgba(255,255,255,0.28)' }}>Pos+Neu</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full" style={{ background: '#a855f7' }} />
-              <span className="text-[8px] font-bold" style={{ color: 'rgba(255,255,255,0.28)' }}>Neg</span>
-            </div>
+          <div className="flex items-center gap-2.5">
+            {[['#10b981', 'Pos'], ['#64748b', 'Neu'], ['#a855f7', 'Neg']].map(([color, label]) => (
+              <div key={label} className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full" style={{ background: color }} />
+                <span className="text-[8px] font-bold" style={{ color: 'rgba(255,255,255,0.28)' }}>{label}</span>
+              </div>
+            ))}
           </div>
         </div>
         <HourlyChart hourlyData={stats.hourly} />
@@ -356,22 +335,23 @@ function DayView({ stats }) {
           </p>
           <div className="flex flex-col gap-2">
             {stats.topActivities.map((act, i) => {
-              const bType = ROUTINE_BEHAVIOR_TYPES[act.type]
+              const typeColor = act.type === 'positive' ? '#10b981' : act.type === 'negative' ? '#a855f7' : '#64748b'
+              const typeLabel = act.type === 'positive' ? 'Positive' : act.type === 'negative' ? 'Negative' : 'Neutral'
               return (
                 <div
                   key={i}
                   className="flex items-center gap-3 px-4 py-3 rounded-2xl"
                   style={{
-                    background:  'rgba(255,255,255,0.03)',
-                    border:      '1px solid rgba(255,255,255,0.06)',
+                    background: 'rgba(255,255,255,0.03)',
+                    border:     '1px solid rgba(255,255,255,0.06)',
                   }}
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-semibold truncate" style={{ color: 'rgba(255,255,255,0.85)' }}>
                       {act.name}
                     </p>
-                    <p className="text-[10px] mt-0.5 font-bold" style={{ color: bType.accent }}>
-                      • {bType.label}
+                    <p className="text-[10px] mt-0.5 font-bold" style={{ color: typeColor }}>
+                      • {typeLabel}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">

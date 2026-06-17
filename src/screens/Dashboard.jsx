@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import XPHeader      from '../components/XPHeader'
 import QuestRow      from '../components/QuestRow'
@@ -6,6 +6,7 @@ import AddQuestBar   from '../components/AddQuestBar'
 import EpicQuestCard from '../components/EpicQuestCard'
 import SearchOverlay from '../components/SearchOverlay'
 import { useAppContext } from '../context/AppContext'
+import { computeDailyXp } from '../store'
 
 export default function Dashboard() {
   const {
@@ -28,16 +29,16 @@ export default function Dashboard() {
   const regularPending = tasks.filter(t => !t.isEpic && !t.completed)
   const allCompleted   = tasks.filter(t =>  t.completed)
 
-  // Per-quest XP display value: 30 XP pool ÷ total non-epic quests
   const nonEpicCount = tasks.filter(t => !t.isEpic).length
   const perQuestXp   = nonEpicCount > 0 ? Math.round(30 / nonEpicCount) : 0
+  const dailyXp      = useMemo(() => computeDailyXp(tasks), [tasks])
 
   return (
     <div className="w-full bg-[#0a0a0f]">
 
       <XPHeader
         totalXp={totalXp}
-        focusMin={focusMin}
+        dailyXp={dailyXp}
         completedCount={allCompleted.length}
         totalCount={tasks.length}
         streak={streak}

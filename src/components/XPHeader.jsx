@@ -2,14 +2,13 @@ import { motion } from 'framer-motion'
 import { Zap, Flame } from 'lucide-react'
 import { getLevelInfo, getRankInfo } from '../store'
 
-/** Formats today's date as "Fri · Jun 13" */
 function todayLabel() {
   return new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-export default function XPHeader({ totalXp, completedCount, totalCount, streak, onSearch }) {
+export default function XPHeader({ totalXp, completedCount, totalCount, dailyXp = 0, streak, onSearch }) {
   const { level, xpIntoLevel, xpForLevel, pct } = getLevelInfo(totalXp)
-  const rank = getRankInfo(level)
+  const rank    = getRankInfo(level)
   const taskPct = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100)
 
   return (
@@ -19,15 +18,16 @@ export default function XPHeader({ totalXp, completedCount, totalCount, streak, 
         {/* ── Top row: title + level badge ── */}
         <div className="flex items-start justify-between mb-5">
           <div>
-            <h1 className="text-[28px] font-black tracking-tight leading-none"
-              style={{ background: 'linear-gradient(90deg,#f97316,#ec4899 50%,#8b5cf6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            <h1
+              className="text-[28px] font-black tracking-tight leading-none"
+              style={{ background: 'linear-gradient(90deg,#f97316,#ec4899 50%,#8b5cf6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+            >
               Summer Grind
             </h1>
             <p className="text-[11px] font-medium text-white/30 mt-1 tracking-widest uppercase">{todayLabel()}</p>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Search button */}
             <motion.button
               whileTap={{ scale: 0.87 }}
               onClick={onSearch}
@@ -40,7 +40,6 @@ export default function XPHeader({ totalXp, completedCount, totalCount, streak, 
               </svg>
             </motion.button>
 
-            {/* Streak badge */}
             {streak > 0 && (
               <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-orange-500/30 bg-orange-500/10">
                 <Flame size={12} className="text-orange-400" />
@@ -48,18 +47,19 @@ export default function XPHeader({ totalXp, completedCount, totalCount, streak, 
               </div>
             )}
 
-            {/* Level badge */}
             <div className="flex flex-col items-center justify-center w-14 h-14 rounded-2xl border border-white/10 bg-white/[0.04]">
               <span className="text-[9px] font-bold text-white/30 uppercase tracking-widest leading-none">LVL</span>
-              <span className="text-[24px] font-black leading-tight"
-                style={{ background: 'linear-gradient(180deg,#fbbf24,#f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              <span
+                className="text-[24px] font-black leading-tight"
+                style={{ background: 'linear-gradient(180deg,#fbbf24,#f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+              >
                 {level}
               </span>
             </div>
           </div>
         </div>
 
-        {/* ── Rank + XP label ── */}
+        {/* ── Rank + XP total ── */}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5">
             <Zap size={11} style={{ color: rank.color }} />
@@ -70,7 +70,7 @@ export default function XPHeader({ totalXp, completedCount, totalCount, streak, 
           <span className="text-[11px] text-white/30 font-medium tabular-nums">{totalXp} XP total</span>
         </div>
 
-        {/* ── XP progress bar ── */}
+        {/* ── XP progress bar (no absolute children — glow via box-shadow) ── */}
         <div className="h-[5px] w-full rounded-full bg-white/[0.06] overflow-hidden mb-1">
           <motion.div
             className="h-full rounded-full"
@@ -78,12 +78,7 @@ export default function XPHeader({ totalXp, completedCount, totalCount, streak, 
             initial={{ width: 0 }}
             animate={{ width: `${pct}%` }}
             transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
-          >
-            {/* Glow pulse on the tip */}
-            {pct > 2 && (
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-pink-400 blur-[3px] opacity-80" />
-            )}
-          </motion.div>
+          />
         </div>
         <div className="flex justify-between items-center mb-4">
           <span className="text-[10px] text-white/20 tabular-nums">Lv {level}</span>
@@ -91,15 +86,31 @@ export default function XPHeader({ totalXp, completedCount, totalCount, streak, 
           <span className="text-[10px] text-white/20 tabular-nums">Lv {level + 1}</span>
         </div>
 
-        {/* ── Daily quest progress ── */}
+        {/* ── Daily dual tracker: Quests + XP ── */}
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[10px] font-semibold text-white/30 uppercase tracking-widest">Daily Quests</span>
-          <span className="text-[10px] font-bold text-white/40 tabular-nums">{completedCount}/{totalCount} · {taskPct}%</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-white/40 tabular-nums">
+              {completedCount}/{totalCount} Quests
+            </span>
+            <span className="text-[9px] text-white/15">·</span>
+            <span
+              className="text-[10px] font-bold tabular-nums"
+              style={{ color: dailyXp > 0 ? '#06b6d4' : 'rgba(255,255,255,0.28)' }}
+            >
+              {dailyXp} / 30 XP
+            </span>
+          </div>
         </div>
+
+        {/* Electric blue quest progress bar with neon glow */}
         <div className="h-[3px] w-full rounded-full bg-white/[0.06] overflow-hidden">
           <motion.div
             className="h-full rounded-full"
-            style={{ background: 'linear-gradient(90deg,#10b981,#06b6d4)' }}
+            style={{
+              background: 'linear-gradient(90deg,#3b82f6,#06b6d4)',
+              boxShadow: taskPct > 0 ? '0 0 8px rgba(6,182,212,0.70)' : 'none',
+            }}
             animate={{ width: `${taskPct}%` }}
             transition={{ duration: 0.5, ease: 'easeOut' }}
           />
