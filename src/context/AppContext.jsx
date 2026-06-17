@@ -282,11 +282,11 @@ export function AppContextProvider({ children }) {
     }
   }, [iso])
 
-  const updateRoutineBlock = useCallback((blockId, { name, category, startTime, endTime }) => {
+  const updateRoutineBlock = useCallback((blockId, { name, type, startTime, endTime }) => {
     setBlocks(prev => {
       const next = prev
         .map(b => b.id === blockId
-          ? { ...b, name, category, polarity: getDefaultPolarity(category), startTime, endTime }
+          ? { ...b, name, type, startTime, endTime }
           : b
         )
         .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))

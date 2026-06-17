@@ -7,7 +7,7 @@ function todayLabel() {
   return new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-export default function XPHeader({ totalXp, completedCount, totalCount, streak }) {
+export default function XPHeader({ totalXp, completedCount, totalCount, streak, onSearch }) {
   const { level, xpIntoLevel, xpForLevel, pct } = getLevelInfo(totalXp)
   const rank = getRankInfo(level)
   const taskPct = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100)
@@ -27,6 +27,19 @@ export default function XPHeader({ totalXp, completedCount, totalCount, streak }
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Search button */}
+            <motion.button
+              whileTap={{ scale: 0.87 }}
+              onClick={onSearch}
+              className="flex items-center justify-center w-9 h-9 rounded-xl border border-white/10 bg-white/4 text-white/35"
+              style={{ touchAction: 'manipulation' }}
+              aria-label="Search"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </motion.button>
+
             {/* Streak badge */}
             {streak > 0 && (
               <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-orange-500/30 bg-orange-500/10">

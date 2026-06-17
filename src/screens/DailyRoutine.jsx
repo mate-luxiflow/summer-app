@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import EstimatedFinishBanner  from '../components/EstimatedFinishBanner'
 import AddRoutineForm         from '../components/AddRoutineForm'
 import RoutineToQuestModal    from '../components/RoutineToQuestModal'
+import SearchOverlay          from '../components/SearchOverlay'
 import { useAppContext, TODAY_IDX } from '../context/AppContext'
 import {
-  CATEGORIES, POLARITY,
+  ROUTINE_BEHAVIOR_TYPES, getBlockType,
   persistence, todayISO,
   getTodayDayName, getWeekdayLabel, getLastOccurrenceISO, getCurrentTimeHHMM,
   DEFAULT_WEEKLY_ROUTINES,
@@ -26,11 +27,11 @@ export default function DailyRoutine() {
 
   const [editingBlock,       setEditingBlock]       = useState(null)
   const [pendingRoutineName, setPendingRoutineName] = useState(null)
+  const [searchOpen,         setSearchOpen]         = useState(false)
 
   const iso       = todayISO()
   const todayName = getTodayDayName()
 
-  // Local UI state — not shared, fine to stay here
   const [selectedDayIdx, setSelectedDayIdx] = useState(TODAY_IDX)
   const [currentTime,    setCurrentTime]    = useState(getCurrentTimeHHMM)
   const isToday = selectedDayIdx === TODAY_IDX
@@ -54,7 +55,7 @@ export default function DailyRoutine() {
     return Math.max(0, timeToMinutes(estimatedFinish) - timeToMinutes(baselineFinish))
   }, [estimatedFinish, baselineFinish])
 
-  // ── Handlers (wrap context ops with local isToday check) ─────────────────
+  // ── Handlers ──────────────────────────────────────────────────────────────
   const handleCascade = useCallback((blockId, deltaMinutes) => {
     if (!isToday) return
     cascadeBlock(blockId, deltaMinutes)
@@ -74,7 +75,6 @@ export default function DailyRoutine() {
   }, [isToday, deleteBlock, deleteRecurring])
 
   const handleEditBlock = useCallback((block) => {
-    // Look up days from recurring template if this is a materialized recurring block
     let blockWithDays = block
     if (block.recurring_source_id) {
       const source = recurringBlocks.find(rb => rb.id === block.recurring_source_id)
@@ -130,22 +130,37 @@ export default function DailyRoutine() {
               </p>
             </div>
 
-            {isToday && estimatedFinish && (
-              <div className="text-right">
-                <p className="text-[9px] font-bold uppercase tracking-widest text-white/22">Est. Finish</p>
-                <p
-                  className="text-[22px] font-black tabular-nums leading-tight"
-                  style={{
-                    background: delayMinutes > 0
-                      ? 'linear-gradient(90deg,#f59e0b,#ef4444)'
-                      : 'linear-gradient(90deg,#22c55e,#06b6d4)',
-                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                  }}
-                >
-                  {estimatedFinish}
-                </p>
-              </div>
-            )}
+            <div className="flex items-start gap-2">
+              {/* Search button */}
+              <motion.button
+                whileTap={{ scale: 0.87 }}
+                onClick={() => setSearchOpen(true)}
+                className="flex items-center justify-center rounded-xl border border-white/10 bg-white/4 text-white/38 transition-colors duration-150"
+                style={{ width: 44, height: 44, touchAction: 'manipulation' }}
+                aria-label="Search"
+              >
+                <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </motion.button>
+
+              {isToday && estimatedFinish && (
+                <div className="text-right">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-white/22">Est. Finish</p>
+                  <p
+                    className="text-[22px] font-black tabular-nums leading-tight"
+                    style={{
+                      background: delayMinutes > 0
+                        ? 'linear-gradient(90deg,#f59e0b,#ef4444)'
+                        : 'linear-gradient(90deg,#22c55e,#06b6d4)',
+                      WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                    }}
+                  >
+                    {estimatedFinish}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Day selector chips */}
@@ -325,6 +340,8 @@ export default function DailyRoutine() {
         }}
         onDismiss={() => setPendingRoutineName(null)}
       />
+
+      <SearchOverlay isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   )
 }
@@ -333,9 +350,8 @@ export default function DailyRoutine() {
 const RoutineBlock = memo(function RoutineBlock({
   block, index, isActive, isPast, isToday, onToggle, onCascade, onDelete, onEdit,
 }) {
-  const cat = CATEGORIES[block.category] ?? CATEGORIES.grind
-  const pol = POLARITY[block.polarity ?? 'neutral']
-  const dur = blockDuration(block.startTime, block.endTime)
+  const bType = ROUTINE_BEHAVIOR_TYPES[getBlockType(block)]
+  const dur   = blockDuration(block.startTime, block.endTime)
 
   const [menuOpen,    setMenuOpen]    = useState(false)
   const pressTimerRef                 = useRef(null)
@@ -358,15 +374,11 @@ const RoutineBlock = memo(function RoutineBlock({
       transition={{ delay: index * 0.025, duration: 0.22 }}
       className="relative mb-1"
     >
-      {/* Full-screen backdrop closes menu on outside tap */}
       {menuOpen && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setMenuOpen(false)}
-        />
+        <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
       )}
 
-      {/* Context menu — appears above the card */}
+      {/* Context menu */}
       <AnimatePresence>
         {menuOpen && (
           <motion.div
@@ -377,8 +389,8 @@ const RoutineBlock = memo(function RoutineBlock({
             className="absolute right-2 bottom-full mb-2 z-50 rounded-xl overflow-hidden"
             style={{
               background:  '#0d0d14',
-              border:      '1px solid rgba(6,182,212,0.35)',
-              boxShadow:   '0 4px 28px rgba(0,0,0,0.70), 0 0 18px rgba(6,182,212,0.12)',
+              border:      `1px solid ${bType.border}`,
+              boxShadow:   `0 4px 28px rgba(0,0,0,0.70), 0 0 18px ${bType.glow}`,
               minWidth:    148,
             }}
           >
@@ -386,7 +398,7 @@ const RoutineBlock = memo(function RoutineBlock({
               onClick={() => { setMenuOpen(false); onEdit?.(block) }}
               className="w-full flex items-center gap-2.5 px-3.5 py-3 text-[12px] font-bold text-white/75 transition-colors duration-150"
               style={{ touchAction: 'manipulation' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(6,182,212,0.08)'}
+              onMouseEnter={e => e.currentTarget.style.background = bType.bg}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
               <span className="text-[14px]">✏️</span>
@@ -404,17 +416,18 @@ const RoutineBlock = memo(function RoutineBlock({
         className="relative flex items-center gap-3 rounded-xl transition-colors duration-200 overflow-hidden"
         style={{
           background: isActive
-            ? cat.accent + '0e'
+            ? bType.bg
             : block.completed
               ? 'rgba(255,255,255,0.01)'
               : 'rgba(255,255,255,0.03)',
           borderWidth: 1,
           borderStyle: 'solid',
           borderColor: isActive
-            ? cat.accent + '40'
+            ? bType.border
             : block.completed
               ? 'rgba(255,255,255,0.03)'
               : 'rgba(255,255,255,0.06)',
+          boxShadow:   isActive ? `0 0 16px ${bType.glow}` : 'none',
           opacity:     !isToday ? 0.72 : 1,
           userSelect:  'none',
           WebkitUserSelect: 'none',
@@ -431,26 +444,33 @@ const RoutineBlock = memo(function RoutineBlock({
         onKeyDown={isToday ? (e => e.key === ' ' && (e.preventDefault(), onToggle())) : undefined}
       >
         {/* Accent bar */}
-        <div className="absolute left-0 top-0 bottom-0 w-0.75"
+        <div
+          className="absolute left-0 top-0 bottom-0 w-0.75"
           style={{
-            background: cat.accent,
+            background: bType.accent,
             opacity:    block.completed ? 0.2 : isActive ? 1 : 0.5,
-            boxShadow:  isActive ? `0 0 8px ${cat.accent}` : 'none',
+            boxShadow:  isActive ? `0 0 8px ${bType.accent}, 0 0 18px ${bType.glow}` : 'none',
           }}
         />
 
-        {/* Left: polarity + icon + name */}
+        {/* Left: type indicator + name */}
         <div className="pl-5 pr-2 py-3 flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
-            <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pol.color }} aria-hidden />
-            <span className="text-[13px] leading-none" aria-hidden>{cat.icon}</span>
+            <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: bType.accent }} aria-hidden />
+            <span
+              className="text-[11px] leading-none font-bold shrink-0"
+              style={{ color: bType.accent, opacity: block.completed ? 0.4 : 0.75 }}
+              aria-hidden
+            >
+              {bType.icon}
+            </span>
 
             {isActive && (
               <motion.span
                 animate={{ opacity: [0.6, 1, 0.6] }}
                 transition={{ repeat: Infinity, duration: 1.8 }}
                 className="text-[8px] font-black uppercase tracking-widest px-1 py-0.5 rounded"
-                style={{ background: cat.accent + '30', color: cat.accent }}
+                style={{ background: bType.accent + '25', color: bType.accent }}
               >
                 NOW
               </motion.span>
@@ -473,15 +493,16 @@ const RoutineBlock = memo(function RoutineBlock({
           </p>
         </div>
 
-        {/* Right: time + cascade + delete — stops touch propagation to prevent long-press */}
+        {/* Right: time + cascade + delete */}
         <div
           className="flex items-center gap-1 pr-1 py-3"
           onClick={e => e.stopPropagation()}
           onTouchStart={e => e.stopPropagation()}
         >
           <div className="text-right mr-1">
-            <p className="text-[12px] font-mono font-bold tabular-nums whitespace-nowrap"
-              style={{ color: isActive ? cat.accent : 'rgba(255,255,255,0.55)' }}
+            <p
+              className="text-[12px] font-mono font-bold tabular-nums whitespace-nowrap"
+              style={{ color: isActive ? bType.accent : 'rgba(255,255,255,0.55)' }}
             >
               {block.startTime} – {block.endTime}
             </p>
@@ -490,12 +511,11 @@ const RoutineBlock = memo(function RoutineBlock({
 
           {isToday && !block.completed && (
             <div className="flex flex-col gap-1">
-              <CascadeButton label="+10m" onClick={() => onCascade(10)} />
-              <CascadeButton label="+20m" onClick={() => onCascade(20)} />
+              <CascadeButton label="+10m" accent={bType.accent} onClick={() => onCascade(10)} />
+              <CascadeButton label="+20m" accent={bType.accent} onClick={() => onCascade(20)} />
             </div>
           )}
 
-          {/* WCAG 2.2: 44×44px touch target, always visible on mobile */}
           <button
             onClick={onDelete}
             className="shrink-0 relative flex items-center justify-center rounded-full transition-colors duration-150"
@@ -516,9 +536,9 @@ const RoutineBlock = memo(function RoutineBlock({
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               className="w-5 h-5 rounded-full flex items-center justify-center mr-2"
-              style={{ background: cat.accent + '30', border: `1.5px solid ${cat.accent}60` }}
+              style={{ background: bType.accent + '25', border: `1.5px solid ${bType.accent}55` }}
             >
-              <svg className="w-3 h-3" style={{ color: cat.accent }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+              <svg className="w-3 h-3" style={{ color: bType.accent }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </motion.div>
@@ -529,7 +549,7 @@ const RoutineBlock = memo(function RoutineBlock({
   )
 })
 
-const CascadeButton = memo(function CascadeButton({ label, onClick }) {
+const CascadeButton = memo(function CascadeButton({ label, accent, onClick }) {
   return (
     <motion.button
       whileTap={{ scale: 0.78, y: 1 }}

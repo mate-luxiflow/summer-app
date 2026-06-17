@@ -4,6 +4,7 @@ import XPHeader      from '../components/XPHeader'
 import QuestRow      from '../components/QuestRow'
 import AddQuestBar   from '../components/AddQuestBar'
 import EpicQuestCard from '../components/EpicQuestCard'
+import SearchOverlay from '../components/SearchOverlay'
 import { useAppContext } from '../context/AppContext'
 
 export default function Dashboard() {
@@ -11,6 +12,8 @@ export default function Dashboard() {
     tasks, totalXp, focusMin, activity,
     addTask, toggleTask, overridePolarity, deleteTask,
   } = useAppContext()
+
+  const [searchOpen, setSearchOpen] = useState(false)
 
   const streak = (() => {
     let count = 0; const d = new Date()
@@ -38,9 +41,12 @@ export default function Dashboard() {
         completedCount={allCompleted.length}
         totalCount={tasks.length}
         streak={streak}
+        onSearch={() => setSearchOpen(true)}
       />
 
       <AddQuestBar onAdd={addTask} />
+
+      <SearchOverlay isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
 
       {/* Epic Quests — pinned above daily list */}
       <AnimatePresence>

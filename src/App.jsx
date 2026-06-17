@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Dashboard    from './screens/Dashboard'
 import DailyRoutine from './screens/DailyRoutine'
+import InsightsView from './screens/InsightsView'
 import { useAppContext } from './context/AppContext'
 
 function ComingSoon({ label }) {
@@ -101,7 +102,7 @@ export default function App() {
         >
           {activeTab === 'dashboard' && <Dashboard />}
           {activeTab === 'routine'   && <DailyRoutine />}
-          {activeTab === 'stats'     && <ComingSoon label="Analytics" />}
+          {activeTab === 'stats'     && <InsightsView onSettings={() => setActiveTab('settings')} />}
           {activeTab === 'store'     && <ComingSoon label="Store" />}
           {activeTab === 'settings'  && <ComingSoon label="Settings" />}
         </motion.div>

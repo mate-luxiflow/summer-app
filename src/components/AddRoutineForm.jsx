@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CATEGORIES, getDefaultPolarity, timeToMinutes } from '../store'
+import { ROUTINE_BEHAVIOR_TYPES, getBlockType, timeToMinutes } from '../store'
 
-const CAT_ENTRIES = Object.entries(CATEGORIES)
+const BEHAVIOR_ENTRIES = Object.entries(ROUTINE_BEHAVIOR_TYPES)
 
 const DAY_PRESETS = [
   { key: 'everyday', label: 'Everyday', days: [0, 1, 2, 3, 4, 5, 6] },
@@ -14,25 +14,24 @@ const DAY_CHIP_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 export default function AddRoutineForm({
   onAdd, onAddRecurring,
   editingBlock, onExitEdit, onUpdate,
-  onBlockSaved,  // (name: string) => void — fires after every successful add/save
+  onBlockSaved,
 }) {
-  const [name,        setName]       = useState('')
-  const [category,    setCategory]   = useState('productivity')
-  const [startTime,   setStart]      = useState('')
-  const [endTime,     setEnd]        = useState('')
-  const [error,       setError]      = useState('')
-  const [isRecurring, setIsRecurring] = useState(false)
-  const [dayPreset,   setDayPreset]  = useState('everyday')
+  const [name,         setName]         = useState('')
+  const [behaviorType, setBehaviorType] = useState('positive')
+  const [startTime,    setStart]        = useState('')
+  const [endTime,      setEnd]          = useState('')
+  const [error,        setError]        = useState('')
+  const [isRecurring,  setIsRecurring]  = useState(false)
+  const [dayPreset,    setDayPreset]    = useState('everyday')
   const [selectedDays, setSelectedDays] = useState([0, 1, 2, 3, 4, 5, 6])
 
-  const isEditMode  = !!editingBlock
-  const selectedCat = CATEGORIES[category]
+  const isEditMode = !!editingBlock
+  const activeType = ROUTINE_BEHAVIOR_TYPES[behaviorType]
 
-  // Pre-populate all fields when editingBlock changes
   useEffect(() => {
     if (!editingBlock) {
       setName('')
-      setCategory('productivity')
+      setBehaviorType('positive')
       setStart('')
       setEnd('')
       setError('')
@@ -42,7 +41,7 @@ export default function AddRoutineForm({
       return
     }
     setName(editingBlock.name ?? '')
-    setCategory(editingBlock.category ?? 'productivity')
+    setBehaviorType(getBlockType(editingBlock))
     setStart(editingBlock.startTime ?? '')
     setEnd(editingBlock.endTime ?? '')
     setError('')
@@ -70,7 +69,7 @@ export default function AddRoutineForm({
   }
 
   function handleRecurringToggle() {
-    if (isEditMode) return  // recurring nature is fixed during edit
+    if (isEditMode) return
     setIsRecurring(v => !v)
     if (isRecurring) {
       setDayPreset('everyday')
@@ -84,10 +83,10 @@ export default function AddRoutineForm({
     if (!isEditMode && isRecurring && selectedDays.length === 0) { setError('Select at least one day'); return }
     setError('')
 
-    const resolvedName = name.trim() || selectedCat?.label || 'New Block'
+    const resolvedName = name.trim() || activeType?.label || 'New Block'
 
     if (isEditMode) {
-      onUpdate?.(editingBlock.id, { name: resolvedName, category, startTime, endTime })
+      onUpdate?.(editingBlock.id, { name: resolvedName, type: behaviorType, startTime, endTime })
       onExitEdit?.()
       onBlockSaved?.(resolvedName)
       return
@@ -96,8 +95,7 @@ export default function AddRoutineForm({
     const blockBase = {
       id:        `${isRecurring ? 'rec' : 'custom'}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       name:      resolvedName,
-      category,
-      polarity:  getDefaultPolarity(category),
+      type:      behaviorType,
       startTime,
       endTime,
       completed: false,
@@ -135,8 +133,9 @@ export default function AddRoutineForm({
       )}
 
       {/* Header row */}
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-[8px] font-black uppercase tracking-[0.15em]"
+      <div className="flex items-center justify-between mb-3">
+        <p
+          className="text-[8px] font-black uppercase tracking-[0.15em]"
           style={{ color: isEditMode ? 'rgba(6,182,212,0.65)' : 'rgba(255,255,255,0.22)' }}
         >
           {isEditMode ? '✏️ Edit Routine Block' : '+ Add Routine Block'}
@@ -157,29 +156,37 @@ export default function AddRoutineForm({
         )}
       </div>
 
-      {/* Category selector */}
-      <div
-        className="flex gap-1.5 overflow-x-auto mb-2.5"
-        style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}
-      >
-        {CAT_ENTRIES.map(([key, cat]) => {
-          const selected = category === key
+      {/* 3-type behavior selector */}
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        {BEHAVIOR_ENTRIES.map(([key, bt]) => {
+          const selected = behaviorType === key
           return (
             <motion.button
               key={key}
-              whileTap={{ scale: 0.90 }}
-              onClick={() => setCategory(key)}
-              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold border transition-all duration-150"
+              whileTap={{ scale: 0.93 }}
+              onClick={() => setBehaviorType(key)}
+              className="flex flex-col items-center gap-1 py-2.5 rounded-xl border transition-all duration-200"
               style={{
-                borderColor: selected ? cat.accent + '60' : 'rgba(255,255,255,0.07)',
-                background:  selected ? cat.accent + '18' : 'rgba(255,255,255,0.02)',
-                color:       selected ? cat.accent         : 'rgba(255,255,255,0.28)',
-                boxShadow:   selected ? `0 0 10px ${cat.accent}28` : 'none',
+                borderColor: selected ? bt.border : 'rgba(255,255,255,0.07)',
+                background:  selected ? bt.bg     : 'rgba(255,255,255,0.02)',
+                boxShadow:   selected ? `0 0 16px ${bt.glow}` : 'none',
+                touchAction: 'manipulation',
               }}
               aria-pressed={selected}
             >
-              <span className="text-[11px]">{cat.icon}</span>
-              <span className="whitespace-nowrap">{cat.label}</span>
+              <span className="text-[18px] leading-none">{bt.icon}</span>
+              <span
+                className="text-[9px] font-black uppercase tracking-wider leading-none"
+                style={{ color: selected ? bt.accent : 'rgba(255,255,255,0.30)' }}
+              >
+                {bt.label}
+              </span>
+              <span
+                className="text-[7px] text-center leading-tight px-1"
+                style={{ color: selected ? bt.accent + 'cc' : 'rgba(255,255,255,0.18)' }}
+              >
+                {bt.desc}
+              </span>
             </motion.button>
           )
         })}
@@ -225,7 +232,6 @@ export default function AddRoutineForm({
               transition={{ duration: 0.18, ease: 'easeOut' }}
               className="overflow-hidden"
             >
-              {/* Preset chips — hidden in edit mode (days already pre-populated as custom) */}
               {!isEditMode && (
                 <div className="flex gap-1.5 mb-2">
                   {DAY_PRESETS.map(preset => {
@@ -250,7 +256,6 @@ export default function AddRoutineForm({
                 </div>
               )}
 
-              {/* Day chips — always shown when recurring, interactive only in custom mode or edit mode */}
               <AnimatePresence>
                 {(dayPreset === 'custom' || isEditMode) && (
                   <motion.div
@@ -295,14 +300,14 @@ export default function AddRoutineForm({
         </AnimatePresence>
       </div>
 
-      {/* Name + time inputs + submit button */}
+      {/* Name + time inputs + submit */}
       <div className="flex items-center gap-2">
         <input
           type="text"
           value={name}
           onChange={e => setName(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-          placeholder={selectedCat?.label ?? 'Block name...'}
+          placeholder={activeType?.label ?? 'Block name...'}
           maxLength={50}
           className="flex-1 min-w-0 h-9 rounded-xl px-3 text-[12px] text-white placeholder-white/22 outline-none border transition-colors duration-150 focus:border-white/22"
           style={{
@@ -319,7 +324,7 @@ export default function AddRoutineForm({
           style={{
             width:       '76px',
             background:  'rgba(255,255,255,0.04)',
-            borderColor: startTime ? (selectedCat?.accent ?? '#fff') + '40' : 'rgba(255,255,255,0.08)',
+            borderColor: startTime ? (activeType?.accent ?? '#fff') + '40' : 'rgba(255,255,255,0.08)',
             colorScheme: 'dark',
           }}
           aria-label="Start time"
@@ -335,7 +340,7 @@ export default function AddRoutineForm({
           style={{
             width:       '76px',
             background:  'rgba(255,255,255,0.04)',
-            borderColor: endTime ? (selectedCat?.accent ?? '#fff') + '40' : 'rgba(255,255,255,0.08)',
+            borderColor: endTime ? (activeType?.accent ?? '#fff') + '40' : 'rgba(255,255,255,0.08)',
             colorScheme: 'dark',
           }}
           aria-label="End time"
@@ -348,16 +353,12 @@ export default function AddRoutineForm({
           style={{
             background: isEditMode
               ? 'linear-gradient(135deg, #06b6d4dd, #f97316cc)'
-              : isRecurring
-                ? 'linear-gradient(135deg, #6366f1ee, #4f46e5aa)'
-                : selectedCat
-                  ? `linear-gradient(135deg, ${selectedCat.accent}ee, ${selectedCat.accent}88)`
-                  : 'linear-gradient(135deg, #a78bfa, #7c3aed)',
+              : activeType
+                ? `linear-gradient(135deg, ${activeType.accent}ee, ${activeType.accent}88)`
+                : 'linear-gradient(135deg, #06b6d4, #2563eb)',
             boxShadow: isEditMode
               ? '0 2px 16px rgba(6,182,212,0.40)'
-              : isRecurring
-                ? '0 2px 14px rgba(99,102,241,0.35)'
-                : `0 2px 14px ${selectedCat?.accent ?? '#a78bfa'}38`,
+              : `0 2px 14px ${activeType?.glow ?? 'rgba(6,182,212,0.35)'}`,
             touchAction: 'manipulation',
           }}
           aria-label={isEditMode ? 'Save changes' : 'Add routine block'}

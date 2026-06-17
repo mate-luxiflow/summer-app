@@ -38,6 +38,47 @@ export const POLARITY = {
   negative: { label: 'Negative', color: '#ef4444', symbol: '−', bg: '#ef444418' },
 }
 
+// ── Routine Block Behavior Types (3-type system, replaces per-block categories) ─
+export const ROUTINE_BEHAVIOR_TYPES = {
+  positive: {
+    label:      'Positive',
+    desc:       'Grind / Build',
+    icon:       '⚡',
+    accent:     '#06b6d4',
+    glow:       'rgba(6,182,212,0.35)',
+    bg:         'rgba(6,182,212,0.07)',
+    border:     'rgba(6,182,212,0.28)',
+    chartColor: '#06b6d4',
+  },
+  neutral: {
+    label:      'Neutral',
+    desc:       'Sleep / Routine',
+    icon:       '○',
+    accent:     '#64748b',
+    glow:       'rgba(100,116,139,0.18)',
+    bg:         'rgba(100,116,139,0.05)',
+    border:     'rgba(100,116,139,0.20)',
+    chartColor: '#94a3b8',
+  },
+  negative: {
+    label:      'Negative',
+    desc:       'Time waste',
+    icon:       '✕',
+    accent:     '#a855f7',
+    glow:       'rgba(168,85,247,0.35)',
+    bg:         'rgba(168,85,247,0.07)',
+    border:     'rgba(168,85,247,0.28)',
+    chartColor: '#a855f7',
+  },
+}
+
+/** Resolves block behavior type — checks `type` field first, falls back to `polarity` for legacy blocks */
+export function getBlockType(block) {
+  if (block?.type && ROUTINE_BEHAVIOR_TYPES[block.type]) return block.type
+  if (block?.polarity && ROUTINE_BEHAVIOR_TYPES[block.polarity]) return block.polarity
+  return 'neutral'
+}
+
 // Kategória → alapértelmezett polaritás leképezés
 const NEGATIVE_CATS = new Set(['social', 'games', 'entertainment'])
 const POSITIVE_CATS = new Set(['education', 'health', 'reading', 'productivity'])
