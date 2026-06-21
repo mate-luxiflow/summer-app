@@ -6,8 +6,6 @@ import {
   persistence, todayISO, blockDuration, timeToMinutes, lastNDays,
 } from '../store'
 
-const TABS = ['Day', 'Week', 'Trend']
-
 // ── Formatting helpers ─────────────────────────────────────────────────────────
 function fmtMin(mins) {
   if (!mins || mins < 1) return '0m'
@@ -374,6 +372,7 @@ function DayView({ stats, viewDate, today }) {
 
       <div className="mt-5">
         <DailyJournalFolder date={viewDate} />
+        <MoodFocusRow date={viewDate} />
       </div>
     </div>
   )
@@ -498,6 +497,35 @@ function TrendView({ trendStats, trendDelta, trend30Total }) {
             {fmtMin(trend30Total)}
           </p>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Mood & Focus mini-row ──────────────────────────────────────────────────────
+function MoodFocusRow({ date }) {
+  const data = persistence.getMoodData(date)
+  if (!data) return null
+
+  return (
+    <div className="flex items-center gap-2 mt-2 px-1">
+      <div
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl"
+        style={{ background: 'rgba(249,115,22,0.10)', border: '1px solid rgba(249,115,22,0.22)' }}
+      >
+        <span className="text-[10px]" aria-hidden>😊</span>
+        <span className="text-[10px] font-black tabular-nums" style={{ color: '#f97316' }}>
+          {data.mood}<span style={{ opacity: 0.5 }}>/10</span>
+        </span>
+      </div>
+      <div
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl"
+        style={{ background: 'rgba(6,182,212,0.10)', border: '1px solid rgba(6,182,212,0.22)' }}
+      >
+        <span className="text-[10px]" aria-hidden>🎯</span>
+        <span className="text-[10px] font-black tabular-nums" style={{ color: '#06b6d4' }}>
+          {data.focus}<span style={{ opacity: 0.5 }}>/10</span>
+        </span>
       </div>
     </div>
   )
@@ -739,7 +767,15 @@ function DailyJournalFolder({ date }) {
 
 // ── Main InsightsView ──────────────────────────────────────────────────────────
 export default function InsightsView({ onSettings }) {
-  const { blocks } = useAppContext()
+  const { blocks, t } = useAppContext()
+
+  // Internal keys stay stable; only display labels are translated
+  const TABS = [
+    { key: 'Day',   label: t('day')   },
+    { key: 'Week',  label: t('week')  },
+    { key: 'Trend', label: t('trend') },
+  ]
+
   const [activeTab, setActiveTab] = useState('Day')
   const today = todayISO()
 
@@ -835,7 +871,7 @@ export default function InsightsView({ onSettings }) {
             </svg>
           </motion.button>
 
-          <h1 className="text-[17px] font-black text-white tracking-tight">Insights</h1>
+          <h1 className="text-[17px] font-black text-white tracking-tight">{t('insightsTitle')}</h1>
 
           <div className="w-10 h-10 flex items-center justify-center">
             <div
@@ -860,17 +896,17 @@ export default function InsightsView({ onSettings }) {
         >
           {TABS.map(tab => (
             <motion.button
-              key={tab}
+              key={tab.key}
               whileTap={{ scale: 0.95 }}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => setActiveTab(tab.key)}
               className="flex-1 py-2 rounded-full text-[12px] font-bold transition-all duration-200"
               style={{
-                background: activeTab === tab ? '#2563eb' : 'transparent',
-                color:      activeTab === tab ? '#fff'    : 'rgba(255,255,255,0.35)',
-                boxShadow:  activeTab === tab ? '0 2px 14px rgba(37,99,235,0.45)' : 'none',
+                background: activeTab === tab.key ? '#2563eb' : 'transparent',
+                color:      activeTab === tab.key ? '#fff'    : 'rgba(255,255,255,0.35)',
+                boxShadow:  activeTab === tab.key ? '0 2px 14px rgba(37,99,235,0.45)' : 'none',
               }}
             >
-              {tab}
+              {tab.label}
             </motion.button>
           ))}
         </div>
@@ -925,7 +961,7 @@ export default function InsightsView({ onSettings }) {
             </svg>
             <span className="text-[10px] font-black uppercase tracking-[0.18em]"
               style={{ color: 'rgba(255,255,255,0.30)' }}>
-              {activeTab === 'Week' ? 'This Week' : 'Last 30 Days'}
+              {activeTab === 'Week' ? t('week') : 'Last 30 Days'}
             </span>
           </div>
         )}

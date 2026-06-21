@@ -338,6 +338,16 @@ export const persistence = {
   // Éjféli Rollover: utolsó ellenőrzési dátum (YYYY-MM-DD)
   getLastCheckedDate: ()    => localStorage.getItem('sg_last_checked_date') ?? null,
   setLastCheckedDate: iso   => localStorage.setItem('sg_last_checked_date', iso),
+  // Language / Theme / Custom day start
+  getLanguage:        ()    => localStorage.getItem('sg_language') ?? 'en',
+  setLanguage:        v     => localStorage.setItem('sg_language', v),
+  getTheme:           ()    => localStorage.getItem('sg_theme') ?? 'dark',
+  setTheme:           v     => localStorage.setItem('sg_theme', v),
+  getCustomDayStart:  ()    => localStorage.getItem('sg_day_start') ?? '00:00',
+  setCustomDayStart:  v     => localStorage.setItem('sg_day_start', v),
+  // Daily mood/focus check-in per day
+  getMoodData:        iso   => load(`sg_mood_${iso}`, null),
+  setMoodData:        (iso, data) => localStorage.setItem(`sg_mood_${iso}`, JSON.stringify(data)),
 }
 
 // ── Dátum-segédletek ──────────────────────────────────────────────────────────

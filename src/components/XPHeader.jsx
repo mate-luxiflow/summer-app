@@ -1,12 +1,14 @@
 import { motion } from 'framer-motion'
 import { Zap, Flame } from 'lucide-react'
 import { getLevelInfo, getRankInfo } from '../store'
+import { useAppContext } from '../context/AppContext'
 
 function todayLabel() {
   return new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
 export default function XPHeader({ totalXp, completedCount, totalCount, dailyXp = 0, streak, onSearch }) {
+  const { t } = useAppContext()
   const { level, xpIntoLevel, xpForLevel, pct } = getLevelInfo(totalXp)
   const rank    = getRankInfo(level)
   const taskPct = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100)
@@ -22,7 +24,7 @@ export default function XPHeader({ totalXp, completedCount, totalCount, dailyXp 
               className="text-[28px] font-black tracking-tight leading-none"
               style={{ background: 'linear-gradient(90deg,#f97316,#ec4899 50%,#8b5cf6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
             >
-              Summer Grind
+              {t('appName')}
             </h1>
             <p className="text-[11px] font-medium text-white/30 mt-1 tracking-widest uppercase">{todayLabel()}</p>
           </div>
@@ -48,7 +50,7 @@ export default function XPHeader({ totalXp, completedCount, totalCount, dailyXp 
             )}
 
             <div className="flex flex-col items-center justify-center w-14 h-14 rounded-2xl border border-white/10 bg-white/[0.04]">
-              <span className="text-[9px] font-bold text-white/30 uppercase tracking-widest leading-none">LVL</span>
+              <span className="text-[9px] font-bold text-white/30 uppercase tracking-widest leading-none">{t('lvl')}</span>
               <span
                 className="text-[24px] font-black leading-tight"
                 style={{ background: 'linear-gradient(180deg,#fbbf24,#f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
@@ -67,10 +69,10 @@ export default function XPHeader({ totalXp, completedCount, totalCount, dailyXp 
               {rank.label}
             </span>
           </div>
-          <span className="text-[11px] text-white/30 font-medium tabular-nums">{totalXp} XP total</span>
+          <span className="text-[11px] text-white/30 font-medium tabular-nums">{totalXp} {t('xpTotal')}</span>
         </div>
 
-        {/* ── XP progress bar (no absolute children — glow via box-shadow) ── */}
+        {/* ── XP progress bar ── */}
         <div className="h-[5px] w-full rounded-full bg-white/[0.06] overflow-hidden mb-1">
           <motion.div
             className="h-full rounded-full"
@@ -88,7 +90,7 @@ export default function XPHeader({ totalXp, completedCount, totalCount, dailyXp 
 
         {/* ── Daily dual tracker: Quests + XP ── */}
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[10px] font-semibold text-white/30 uppercase tracking-widest">Daily Quests</span>
+          <span className="text-[10px] font-semibold text-white/30 uppercase tracking-widest">{t('dailyQuests')}</span>
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold text-white/40 tabular-nums">
               {completedCount}/{totalCount} Quests
