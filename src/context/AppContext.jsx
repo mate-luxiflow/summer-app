@@ -6,6 +6,42 @@ import {
   cascadeShift, getEstimatedFinish, timeToMinutes, wouldExceedMidnight,
 } from '../store'
 
+// ── Éjféli Rollover Engine ────────────────────────────────────────────────────
+// Futtatható mount-kor és visibilitychange/focus eseményekre.
+// Ha az eltárolt utolsó ellenőrzési dátum eltér a mai ISO-tól, elvégzi a reset-et
+// és újratölti az oldalt, hogy az AppContext tiszta állapottal inicializálódjon.
+function checkAndPerformRollover() {
+  const newIso      = todayISO()
+  const lastChecked = persistence.getLastCheckedDate()
+
+  if (!lastChecked) {
+    persistence.setLastCheckedDate(newIso)
+    return
+  }
+  if (lastChecked === newIso) return
+
+  const prevIso = lastChecked
+
+  // 1. Auto-seal az előző napi napló, ha van benne tartalom
+  if (persistence.getDailyLog(prevIso).trim().length >= 5) {
+    persistence.setJournalClaimed(prevIso)
+  }
+
+  // 2. Kész nem-epic questek törlése; hiányos és epic questek megmaradnak
+  const currentTasks = persistence.getTasks()
+  const resetTasks   = currentTasks.filter(t => t.isEpic || !t.completed)
+  persistence.setTasks(resetTasks)
+
+  // 3. Új nap daily XP baseline = 0
+  persistence.setDailyXp(newIso, 0)
+
+  // 4. Dátum frissítése — ezt a reload előtt kell írni!
+  persistence.setLastCheckedDate(newIso)
+
+  // 5. Újratöltés → AppContext tiszta állapottal inicializálódik
+  window.location.reload()
+}
+
 const AppContext = createContext(null)
 
 export const TODAY_IDX = new Date().getDay()
@@ -77,6 +113,21 @@ export function AppContextProvider({ children }) {
 
   const [toast, setToast] = useState(null)
   const dismissToast = useCallback(() => setToast(null), [])
+
+  // ── Éjféli Rollover: mount + visibilitychange + focus ─────────────────────
+  useEffect(() => {
+    checkAndPerformRollover()
+
+    const onVisible = () => { if (document.visibilityState === 'visible') checkAndPerformRollover() }
+    const onFocus   = () => checkAndPerformRollover()
+
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [])
 
   // ── One-time migration: seed today's daily XP baseline from existing data ──
   // Prevents double-counting XP on first load after switching to the new system.

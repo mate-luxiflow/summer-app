@@ -335,6 +335,9 @@ export const persistence = {
   // Store Minutes egyenleg
   getStoreMinutes: () => { const n = Number(localStorage.getItem('sg_store_min')); return isFinite(n) ? n : 0 },
   setStoreMinutes: v  => localStorage.setItem('sg_store_min', String(Math.max(0, Math.round(v)))),
+  // Éjféli Rollover: utolsó ellenőrzési dátum (YYYY-MM-DD)
+  getLastCheckedDate: ()    => localStorage.getItem('sg_last_checked_date') ?? null,
+  setLastCheckedDate: iso   => localStorage.setItem('sg_last_checked_date', iso),
 }
 
 // ── Dátum-segédletek ──────────────────────────────────────────────────────────

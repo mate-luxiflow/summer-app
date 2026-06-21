@@ -524,7 +524,9 @@ function DailyJournalFolder({ date }) {
   }, [date])
 
   const hasContent    = text.trim().length >= 5
-  const isReadOnly    = sealed && !editMode
+  // A mai napló SOHA nem kerülhet read-only módba — éjfélig szabadon szerkeszthető.
+  // Régebbi napoknál: sealed + nem editMode → read-only (Reopen & Edit gomb jelenik meg).
+  const isReadOnly    = sealed && !isToday && !editMode
   const firstCreation = !sealed
 
   const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
@@ -574,7 +576,7 @@ function DailyJournalFolder({ date }) {
   const subtitleText = hasContent && sealed
     ? null
     : sealed
-      ? 'Tap to read or edit'
+      ? isToday ? 'Tap to keep writing' : 'Tap to read or edit'
       : isToday
         ? 'Tap to open · earn +10 Store Min'
         : 'Tap to add a reflection for this day'
