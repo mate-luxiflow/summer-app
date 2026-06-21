@@ -4,14 +4,15 @@ import Dashboard    from './screens/Dashboard'
 import DailyRoutine from './screens/DailyRoutine'
 import InsightsView from './screens/InsightsView'
 import SettingsView from './screens/SettingsView'
+import CheckInModal from './components/CheckInModal'
 import { useAppContext } from './context/AppContext'
 
 function ComingSoon({ label }) {
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center gap-3">
-      <div className="text-3xl opacity-20">🚧</div>
-      <p className="text-white/20 text-[13px] font-semibold uppercase tracking-widest">{label}</p>
-      <p className="text-white/10 text-[11px]">Coming soon</p>
+      <div className="text-3xl" style={{ opacity: 0.18 }}>🚧</div>
+      <p className="text-[13px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>{label}</p>
+      <p className="text-[11px]" style={{ color: 'var(--text-dim)' }}>Coming soon</p>
     </div>
   )
 }
@@ -58,7 +59,7 @@ const TAB_I18N = {
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [navHidden, setNavHidden] = useState(false)
-  const { toast, dismissToast, t } = useAppContext()
+  const { toast, dismissToast, t, showCheckInModal, dismissCheckInModal } = useAppContext()
 
   // Auto-dismiss toast after 5 s
   useEffect(() => {
@@ -79,8 +80,11 @@ export default function App() {
 
   return (
     <div
-      className="relative min-h-screen bg-[#0a0a0f]"
-      style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}
+      className="relative min-h-screen"
+      style={{
+        background:    'var(--bg-app)',
+        paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))',
+      }}
     >
       <AnimatePresence mode="wait">
         <motion.div
@@ -106,7 +110,8 @@ export default function App() {
             animate={{ y: 0 }}
             exit={{ y: 90 }}
             transition={{ duration: 0.2, ease: 'easeInOut' }}
-            className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/6 bg-[#0a0a0f]/90 backdrop-blur-xl"
+            className="fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur-xl"
+            style={{ background: 'var(--nav-bg)', borderColor: 'var(--nav-border)' }}
             aria-label="Main navigation"
           >
             <div className="h-16 flex items-center justify-around px-1">
@@ -128,12 +133,16 @@ export default function App() {
                         transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                       />
                     )}
-                    <span className={`transition-colors duration-150 ${isActive ? 'text-white' : 'text-white/25'}`}>
+                    <span
+                      className="transition-colors duration-150"
+                      style={{ color: isActive ? 'var(--tab-active)' : 'var(--tab-inactive)' }}
+                    >
                       {TAB_ICONS[key](isActive)}
                     </span>
-                    <span className={`text-[8px] font-bold uppercase tracking-widest transition-colors duration-150 ${
-                      isActive ? 'text-white/70' : 'text-white/15'
-                    }`}>
+                    <span
+                      className="text-[8px] font-bold uppercase tracking-widest transition-colors duration-150"
+                      style={{ color: isActive ? 'var(--tab-label-active)' : 'var(--tab-label-inactive)' }}
+                    >
                       {t(TAB_I18N[key])}
                     </span>
                   </button>
@@ -146,6 +155,9 @@ export default function App() {
           </motion.nav>
         )}
       </AnimatePresence>
+
+      {/* Transient check-in modal */}
+      <CheckInModal visible={showCheckInModal} onDismiss={dismissCheckInModal} />
 
       {/* Auto-claim toast */}
       <AnimatePresence>

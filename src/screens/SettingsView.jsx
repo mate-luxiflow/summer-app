@@ -1,17 +1,24 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useAppContext } from '../context/AppContext'
 import { LANGUAGES } from '../i18n'
-import { todayISO } from '../store'
+import { todayISO, lastNDays, persistence } from '../store'
 
-// ── Mood & Focus Slider ────────────────────────────────────────────────────────
+// ── Date formatter ─────────────────────────────────────────────────────────────
+function fmtDate(iso) {
+  return new Date(iso + 'T12:00:00').toLocaleDateString(undefined, {
+    weekday: 'short', month: 'short', day: 'numeric',
+  })
+}
+
+// ── Mood Slider (theme-aware via CSS vars) ─────────────────────────────────────
 function MoodSlider({ label, value, onChange, colorFrom, colorTo }) {
   const pct = (value / 10) * 100
 
   return (
     <div className="mb-5">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[12px] font-semibold" style={{ color: 'rgba(255,255,255,0.60)' }}>
+        <span className="text-[12px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
           {label}
         </span>
         <span
@@ -27,11 +34,10 @@ function MoodSlider({ label, value, onChange, colorFrom, colorTo }) {
         </span>
       </div>
 
-      {/* Track + thumb */}
       <div className="relative h-10 flex items-center">
         <div
           className="absolute left-0 right-0 h-[5px] rounded-full"
-          style={{ background: 'rgba(255,255,255,0.08)' }}
+          style={{ background: 'var(--slider-track)' }}
         />
         <div
           className="absolute left-0 h-[5px] rounded-full transition-all duration-100"
@@ -51,21 +57,20 @@ function MoodSlider({ label, value, onChange, colorFrom, colorTo }) {
           className="absolute left-0 right-0 w-full h-10 opacity-0 cursor-pointer"
           style={{ touchAction: 'none' }}
         />
-        {/* Custom thumb */}
         <div
-          className="absolute w-5 h-5 rounded-full border-2 border-white/20 shadow-lg transition-all duration-100 pointer-events-none"
+          className="absolute w-5 h-5 rounded-full shadow-lg transition-all duration-100 pointer-events-none"
           style={{
             left: `calc(${pct}% - 10px)`,
             background: `linear-gradient(135deg, ${colorFrom}, ${colorTo})`,
             boxShadow: `0 0 14px ${colorTo}70`,
+            border: '2px solid rgba(255,255,255,0.22)',
           }}
         />
       </div>
 
-      {/* Scale ticks */}
       <div className="flex justify-between mt-0.5 px-0.5">
         {[0, 2, 4, 6, 8, 10].map(n => (
-          <span key={n} className="text-[8px] font-bold tabular-nums" style={{ color: 'rgba(255,255,255,0.18)' }}>
+          <span key={n} className="text-[8px] font-bold tabular-nums" style={{ color: 'var(--text-dim)' }}>
             {n}
           </span>
         ))}
@@ -77,8 +82,10 @@ function MoodSlider({ label, value, onChange, colorFrom, colorTo }) {
 // ── Section Header ─────────────────────────────────────────────────────────────
 function SectionHeader({ label }) {
   return (
-    <p className="text-[9px] font-black uppercase tracking-[0.20em] mb-3 mt-1"
-      style={{ color: 'rgba(255,255,255,0.25)' }}>
+    <p
+      className="text-[9px] font-black uppercase tracking-[0.20em] mb-3 mt-1"
+      style={{ color: 'var(--text-muted)' }}
+    >
       {label}
     </p>
   )
@@ -89,9 +96,69 @@ function SettingsCard({ children, className = '' }) {
   return (
     <div
       className={`rounded-2xl p-4 mb-4 ${className}`}
-      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}
+      style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)' }}
     >
       {children}
+    </div>
+  )
+}
+
+// ── Check-in History Row ───────────────────────────────────────────────────────
+function HistoryItem({ iso, data, isLast }) {
+  const moodPct  = (data.mood  / 10) * 100
+  const focusPct = (data.focus / 10) * 100
+  const savedTime = data.savedAt
+    ? new Date(data.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : null
+
+  return (
+    <div
+      className="py-3.5"
+      style={{ borderBottom: isLast ? 'none' : '1px solid var(--border-subtle)' }}
+    >
+      {/* Date row */}
+      <div className="flex items-center gap-2 mb-2">
+        <p className="text-[12px] font-bold flex-1" style={{ color: 'var(--text-primary)' }}>
+          {fmtDate(iso)}
+        </p>
+        {savedTime && (
+          <span className="text-[9px] font-semibold" style={{ color: 'var(--text-muted)' }}>
+            {savedTime}
+          </span>
+        )}
+      </div>
+
+      {/* Mood bar */}
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="text-[9px] font-bold uppercase tracking-wider w-9" style={{ color: 'var(--text-muted)' }}>
+          Mood
+        </span>
+        <div className="flex-1 h-1.5 rounded-full" style={{ background: 'var(--slider-track)' }}>
+          <div
+            className="h-full rounded-full"
+            style={{ width: `${moodPct}%`, background: 'linear-gradient(90deg,#f97316,#ec4899)' }}
+          />
+        </div>
+        <span className="text-[10px] font-black tabular-nums w-4 text-right" style={{ color: '#f97316' }}>
+          {data.mood}
+        </span>
+      </div>
+
+      {/* Focus bar */}
+      <div className="flex items-center gap-2">
+        <span className="text-[9px] font-bold uppercase tracking-wider w-9" style={{ color: 'var(--text-muted)' }}>
+          Focus
+        </span>
+        <div className="flex-1 h-1.5 rounded-full" style={{ background: 'var(--slider-track)' }}>
+          <div
+            className="h-full rounded-full"
+            style={{ width: `${focusPct}%`, background: 'linear-gradient(90deg,#3b82f6,#06b6d4)' }}
+          />
+        </div>
+        <span className="text-[10px] font-black tabular-nums w-4 text-right" style={{ color: '#06b6d4' }}>
+          {data.focus}
+        </span>
+      </div>
     </div>
   )
 }
@@ -104,15 +171,16 @@ export default function SettingsView() {
     theme,    setTheme,
     customDayStart, setCustomDayStart,
     saveMoodCheckin, todayMoodData,
+    checkInTime, setCheckInTime,
   } = useAppContext()
 
   const today = todayISO()
 
-  // Mood & focus local state — init from saved data if available
-  const [mood,       setMood]       = useState(todayMoodData?.mood  ?? 5)
-  const [focus,      setFocus]      = useState(todayMoodData?.focus ?? 5)
-  const [justSaved,  setJustSaved]  = useState(false)
-  const [dayStart,   setDayStart]   = useState(customDayStart)
+  const [mood,      setMood]      = useState(todayMoodData?.mood  ?? 5)
+  const [focus,     setFocus]     = useState(todayMoodData?.focus ?? 5)
+  const [justSaved, setJustSaved] = useState(false)
+  const [dayStart,  setDayStart]  = useState(customDayStart)
+  const [checkinT,  setCheckinT]  = useState(checkInTime)
 
   const handleSaveCheckin = useCallback(() => {
     saveMoodCheckin(mood, focus)
@@ -120,34 +188,54 @@ export default function SettingsView() {
     setTimeout(() => setJustSaved(false), 2000)
   }, [mood, focus, saveMoodCheckin])
 
-  const handleDayStartChange = useCallback((val) => {
+  const handleDayStartChange = useCallback(val => {
     setDayStart(val)
     setCustomDayStart(val)
   }, [setCustomDayStart])
+
+  const handleCheckinTimeChange = useCallback(val => {
+    setCheckinT(val)
+    setCheckInTime(val)
+  }, [setCheckInTime])
 
   const lastSavedTime = todayMoodData?.savedAt
     ? new Date(todayMoodData.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : null
 
+  // Last 90 days that have check-in data, most recent first
+  const checkInHistory = useMemo(() => (
+    lastNDays(90)
+      .map(d => ({ iso: d, data: persistence.getMoodData(d) }))
+      .filter(({ data }) => data !== null)
+      .reverse()
+  ), [today, todayMoodData])
+
   return (
-    <div
-      className="w-full min-h-screen"
-      style={{ background: 'linear-gradient(to bottom, #0b0b12 0%, #020205 100%)' }}
-    >
+    <div className="w-full min-h-screen" style={{ background: 'var(--bg-view)' }}>
+
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header
-        className="px-4 border-b border-white/6"
+        className="px-4 border-b"
         style={{
+          borderColor:   'var(--header-border)',
           paddingTop:    'calc(env(safe-area-inset-top, 0px) + 14px)',
           paddingBottom: '14px',
         }}
       >
         <div className="flex items-center justify-between">
           <div className="w-10 h-10" />
-          <h1 className="text-[17px] font-black text-white tracking-tight">{t('settingsTitle')}</h1>
+          <h1
+            className="text-[17px] font-black tracking-tight"
+            style={{ color: 'var(--text-primary)' }}
+          >
+            {t('settingsTitle')}
+          </h1>
           <div
-            className="w-10 h-10 flex items-center justify-center rounded-xl border border-white/8"
-            style={{ color: 'rgba(255,255,255,0.25)' }}
+            className="w-10 h-10 flex items-center justify-center rounded-xl"
+            style={{
+              color:  'var(--text-muted)',
+              border: '1px solid var(--border-subtle)',
+            }}
           >
             <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -159,53 +247,57 @@ export default function SettingsView() {
 
       <div className="px-4 pt-5 pb-32">
 
-        {/* ── 1. Language ──────────────────────────────────────────────────── */}
+        {/* ── 1. Language — Premium Dropdown ───────────────────────────────── */}
         <SectionHeader label={t('sectionLang')} />
         <SettingsCard>
-          <div className="grid grid-cols-2 gap-2">
-            {LANGUAGES.map(lang => {
-              const isActive = language === lang.code
-              return (
-                <motion.button
+          <div className="relative">
+            {/* Custom overlay — shows selected language name + chevron */}
+            <div
+              className="absolute inset-0 flex items-center px-4 pointer-events-none"
+              style={{ zIndex: 1 }}
+            >
+              <span className="flex-1 text-[14px] font-bold" style={{ color: 'var(--text-primary)' }}>
+                {LANGUAGES.find(l => l.code === language)?.native ?? language}
+              </span>
+              <svg
+                className="w-4 h-4 shrink-0"
+                style={{ color: 'var(--text-muted)' }}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+
+            {/* Native select — transparent text so overlay shows through */}
+            <select
+              value={language}
+              onChange={e => setLanguage(e.target.value)}
+              className="relative w-full rounded-xl py-4 px-4 outline-none cursor-pointer"
+              style={{
+                background:      'var(--surface-elevated)',
+                border:          '1px solid var(--border-medium)',
+                color:           'transparent',
+                WebkitAppearance:'none',
+                MozAppearance:   'none',
+                appearance:      'none',
+                touchAction:     'manipulation',
+              }}
+              aria-label={t('sectionLang')}
+            >
+              {LANGUAGES.map(lang => (
+                <option
                   key={lang.code}
-                  whileTap={{ scale: 0.93 }}
-                  onClick={() => setLanguage(lang.code)}
-                  className="flex items-center gap-2.5 px-3 py-3 rounded-xl transition-all duration-150"
-                  style={{
-                    background:  isActive
-                      ? 'linear-gradient(135deg, rgba(249,115,22,0.15), rgba(236,72,153,0.15))'
-                      : 'rgba(255,255,255,0.03)',
-                    border: isActive
-                      ? '1px solid rgba(249,115,22,0.45)'
-                      : '1px solid rgba(255,255,255,0.07)',
-                    touchAction: 'manipulation',
-                  }}
-                  aria-pressed={isActive}
-                  aria-label={lang.native}
+                  value={lang.code}
+                  style={{ color: '#0f172a', background: '#fff' }}
                 >
-                  <span
-                    className="text-[14px] font-bold leading-none"
-                    style={{
-                      color: isActive
-                        ? 'rgba(255,255,255,0.92)'
-                        : 'rgba(255,255,255,0.42)',
-                    }}
-                  >
-                    {lang.native}
-                  </span>
-                  {isActive && (
-                    <div
-                      className="ml-auto w-1.5 h-1.5 rounded-full shrink-0"
-                      style={{ background: 'linear-gradient(135deg,#f97316,#ec4899)' }}
-                    />
-                  )}
-                </motion.button>
-              )
-            })}
+                  {lang.native}
+                </option>
+              ))}
+            </select>
           </div>
         </SettingsCard>
 
-        {/* ── 2. Appearance ────────────────────────────────────────────────── */}
+        {/* ── 2. Appearance ─────────────────────────────────────────────────── */}
         <SectionHeader label={t('sectionAppear')} />
         <SettingsCard>
           <div className="flex gap-2">
@@ -220,16 +312,16 @@ export default function SettingsView() {
                   onClick={() => setTheme(mode)}
                   className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl transition-all duration-150"
                   style={{
-                    background:  isActive
+                    background: isActive
                       ? mode === 'dark'
                         ? 'rgba(139,92,246,0.15)'
                         : 'rgba(251,191,36,0.15)'
-                      : 'rgba(255,255,255,0.03)',
+                      : 'var(--surface-card)',
                     border: isActive
                       ? mode === 'dark'
                         ? '1px solid rgba(139,92,246,0.45)'
                         : '1px solid rgba(251,191,36,0.45)'
-                      : '1px solid rgba(255,255,255,0.07)',
+                      : '1px solid var(--border-subtle)',
                     touchAction: 'manipulation',
                   }}
                   aria-pressed={isActive}
@@ -239,8 +331,8 @@ export default function SettingsView() {
                     className="text-[12px] font-bold"
                     style={{
                       color: isActive
-                        ? mode === 'dark' ? '#a78bfa' : '#fbbf24'
-                        : 'rgba(255,255,255,0.35)',
+                        ? mode === 'dark' ? '#a78bfa' : '#f59e0b'
+                        : 'var(--text-muted)',
                     }}
                   >
                     {label}
@@ -251,30 +343,28 @@ export default function SettingsView() {
           </div>
         </SettingsCard>
 
-        {/* ── 3. Day Reset Time ────────────────────────────────────────────── */}
+        {/* ── 3. Day Reset Time ─────────────────────────────────────────────── */}
         <SectionHeader label={t('sectionDayReset')} />
         <SettingsCard>
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1">
-              <p className="text-[12px] font-semibold mb-1" style={{ color: 'rgba(255,255,255,0.55)' }}>
+              <p className="text-[12px] font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
                 {t('dayResetDesc')}
               </p>
             </div>
-            <div className="shrink-0">
-              <input
-                type="time"
-                value={dayStart}
-                onChange={e => handleDayStartChange(e.target.value)}
-                className="rounded-xl px-3 py-2.5 text-[16px] font-black tabular-nums text-center outline-none"
-                style={{
-                  background:  'rgba(255,255,255,0.06)',
-                  border:      '1px solid rgba(255,255,255,0.14)',
-                  color:       '#06b6d4',
-                  minWidth:    '96px',
-                  WebkitAppearance: 'none',
-                }}
-              />
-            </div>
+            <input
+              type="time"
+              value={dayStart}
+              onChange={e => handleDayStartChange(e.target.value)}
+              className="shrink-0 rounded-xl px-3 py-2.5 text-[16px] font-black tabular-nums text-center outline-none"
+              style={{
+                background:      'var(--input-bg)',
+                border:          '1px solid var(--input-border)',
+                color:           'var(--accent-time)',
+                minWidth:        '96px',
+                WebkitAppearance:'none',
+              }}
+            />
           </div>
 
           {dayStart !== '00:00' && (
@@ -292,9 +382,38 @@ export default function SettingsView() {
           )}
         </SettingsCard>
 
-        {/* ── 4. Daily Check-in ────────────────────────────────────────────── */}
+        {/* ── 4. Daily Check-in ─────────────────────────────────────────────── */}
         <SectionHeader label={t('sectionCheckin')} />
         <SettingsCard>
+          {/* Popup trigger time row */}
+          <div
+            className="flex items-center justify-between gap-4 mb-4 pb-4"
+            style={{ borderBottom: '1px solid var(--border-subtle)' }}
+          >
+            <div className="flex-1">
+              <p className="text-[12px] font-bold mb-0.5" style={{ color: 'var(--text-primary)' }}>
+                {t('checkinTimeLabel')}
+              </p>
+              <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>
+                Auto-popup if no check-in yet
+              </p>
+            </div>
+            <input
+              type="time"
+              value={checkinT}
+              onChange={e => handleCheckinTimeChange(e.target.value)}
+              className="shrink-0 rounded-xl px-3 py-2.5 text-[16px] font-black tabular-nums text-center outline-none"
+              style={{
+                background:      'var(--input-bg)',
+                border:          '1px solid var(--input-border)',
+                color:           '#f97316',
+                minWidth:        '96px',
+                WebkitAppearance:'none',
+              }}
+            />
+          </div>
+
+          {/* Today's save status */}
           {lastSavedTime && (
             <div
               className="flex items-center gap-2 px-3 py-2 rounded-xl mb-4"
@@ -316,7 +435,6 @@ export default function SettingsView() {
             colorFrom="#f97316"
             colorTo="#ec4899"
           />
-
           <MoodSlider
             label={t('focusLabel')}
             value={focus}
@@ -331,8 +449,8 @@ export default function SettingsView() {
             className="w-full py-3.5 rounded-2xl font-black text-[14px] text-white transition-all duration-300 mt-1"
             style={{
               background:  justSaved
-                ? 'linear-gradient(135deg, #22c55e, #16a34a)'
-                : 'linear-gradient(135deg, #f97316, #ec4899)',
+                ? 'linear-gradient(135deg,#22c55e,#16a34a)'
+                : 'linear-gradient(135deg,#f97316,#ec4899)',
               boxShadow:   justSaved
                 ? '0 4px 22px rgba(34,197,94,0.32)'
                 : '0 4px 22px rgba(249,115,22,0.28)',
@@ -344,10 +462,44 @@ export default function SettingsView() {
           </motion.button>
         </SettingsCard>
 
-        {/* ── App info ─────────────────────────────────────────────────────── */}
+        {/* ── 5. Check-in History ───────────────────────────────────────────── */}
+        <SectionHeader label={t('sectionCheckinHistory')} />
+
+        {checkInHistory.length === 0 ? (
+          <div
+            className="rounded-2xl mb-4 flex flex-col items-center justify-center py-10 gap-2"
+            style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)' }}
+          >
+            <span className="text-2xl" style={{ opacity: 0.20 }}>📊</span>
+            <p className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>
+              {t('noCheckinHistory')}
+            </p>
+          </div>
+        ) : (
+          <div
+            className="rounded-2xl mb-4 overflow-hidden"
+            style={{ background: 'var(--surface-card)', border: '1px solid var(--border-subtle)' }}
+          >
+            <div className="px-4">
+              {checkInHistory.map(({ iso, data }, idx) => (
+                <HistoryItem
+                  key={iso}
+                  iso={iso}
+                  data={data}
+                  isLast={idx === checkInHistory.length - 1}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* App info */}
         <div className="text-center mt-6">
-          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.10)' }}>
-            Summer Grind · v5.5
+          <p
+            className="text-[10px] font-bold uppercase tracking-widest"
+            style={{ color: 'var(--text-dim)' }}
+          >
+            Summer Grind · v5.6
           </p>
         </div>
       </div>

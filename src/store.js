@@ -345,6 +345,9 @@ export const persistence = {
   setTheme:           v     => localStorage.setItem('sg_theme', v),
   getCustomDayStart:  ()    => localStorage.getItem('sg_day_start') ?? '00:00',
   setCustomDayStart:  v     => localStorage.setItem('sg_day_start', v),
+  // Daily check-in popup trigger time
+  getCheckInTime:     ()    => localStorage.getItem('sg_checkin_time') ?? '20:00',
+  setCheckInTime:     v     => localStorage.setItem('sg_checkin_time', v),
   // Daily mood/focus check-in per day
   getMoodData:        iso   => load(`sg_mood_${iso}`, null),
   setMoodData:        (iso, data) => localStorage.setItem(`sg_mood_${iso}`, JSON.stringify(data)),

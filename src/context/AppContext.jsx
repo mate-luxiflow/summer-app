@@ -138,6 +138,8 @@ export function AppContextProvider({ children }) {
   const [theme,          setThemeState]         = useState(() => persistence.getTheme())
   const [customDayStart, setCustomDayStartState]= useState(() => persistence.getCustomDayStart())
   const [todayMoodData,  setTodayMoodData]      = useState(() => persistence.getMoodData(iso))
+  const [checkInTime,    setCheckInTimeState]   = useState(() => persistence.getCheckInTime())
+  const [showCheckInModal, setShowCheckInModal] = useState(false)
 
   // ── Theme effect: toggle dark/light class on <html> ──────────────────────────
   useEffect(() => {
@@ -178,6 +180,21 @@ export function AppContextProvider({ children }) {
       window.removeEventListener('focus', onFocus)
     }
   }, [])
+
+  // ── Check-in modal trigger: fires when clock hits checkInTime and no data yet ──
+  useEffect(() => {
+    function checkTrigger() {
+      const now     = new Date()
+      const nowMins = now.getHours() * 60 + now.getMinutes()
+      const [h, m]  = checkInTime.split(':').map(Number)
+      if (nowMins >= h * 60 + m && !persistence.getMoodData(todayISO())) {
+        setShowCheckInModal(true)
+      }
+    }
+    checkTrigger()
+    const id = setInterval(checkTrigger, 60_000)
+    return () => clearInterval(id)
+  }, [checkInTime])
 
   // ── One-time migration: seed today's daily XP from existing tasks ─────────────
   useEffect(() => {
@@ -236,10 +253,18 @@ export function AppContextProvider({ children }) {
     persistence.setCustomDayStart(time)
   }, [])
 
+  const setCheckInTime = useCallback(time => {
+    setCheckInTimeState(time)
+    persistence.setCheckInTime(time)
+  }, [])
+
+  const dismissCheckInModal = useCallback(() => setShowCheckInModal(false), [])
+
   const saveMoodCheckin = useCallback((mood, focus) => {
     const data = { mood, focus, savedAt: new Date().toISOString() }
     persistence.setMoodData(iso, data)
     setTodayMoodData(data)
+    setShowCheckInModal(false)
   }, [iso])
 
   // ── Quest operations ───────────────────────────────────────────────────────
@@ -451,6 +476,7 @@ export function AppContextProvider({ children }) {
     // Settings
     language, theme, customDayStart, todayMoodData,
     setLanguage, setTheme, setCustomDayStart, saveMoodCheckin,
+    checkInTime, setCheckInTime, showCheckInModal, dismissCheckInModal,
     // i18n helper
     t,
   }

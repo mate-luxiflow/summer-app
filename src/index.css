@@ -11,27 +11,72 @@
     overscroll-behavior: none;
   }
 
-  /* #root grows with content — min-height keeps it at least full-screen */
   #root {
     min-height: 100%;
   }
 
+  /* ── Design Tokens: Dark (default) ─────────────────────────────────────── */
+  :root {
+    /* Backgrounds */
+    --bg-app:          #0a0a0f;
+    --bg-view:         linear-gradient(180deg, #0b0b12 0%, #020205 100%);
+    --surface-card:    rgba(255,255,255,0.03);
+    --surface-elevated:rgba(255,255,255,0.055);
+    --border-subtle:   rgba(255,255,255,0.07);
+    --border-medium:   rgba(255,255,255,0.14);
+    --header-border:   rgba(255,255,255,0.06);
+    /* Navigation */
+    --nav-bg:          rgba(10,10,15,0.90);
+    --nav-border:      rgba(255,255,255,0.06);
+    /* Text */
+    --text-primary:    rgba(255,255,255,0.92);
+    --text-secondary:  rgba(255,255,255,0.55);
+    --text-muted:      rgba(255,255,255,0.25);
+    --text-dim:        rgba(255,255,255,0.18);
+    /* Tab bar */
+    --tab-active:      #ffffff;
+    --tab-inactive:    rgba(255,255,255,0.25);
+    --tab-label-active:  rgba(255,255,255,0.70);
+    --tab-label-inactive:rgba(255,255,255,0.15);
+    /* Inputs / sliders */
+    --slider-track:    rgba(255,255,255,0.08);
+    --input-bg:        rgba(255,255,255,0.06);
+    --input-border:    rgba(255,255,255,0.14);
+    --accent-time:     #06b6d4;
+  }
+
+  /* ── Design Tokens: Light ───────────────────────────────────────────────── */
+  html.light {
+    --bg-app:          #f1f5f9;
+    --bg-view:         linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    --surface-card:    rgba(0,0,0,0.038);
+    --surface-elevated:rgba(0,0,0,0.060);
+    --border-subtle:   rgba(0,0,0,0.08);
+    --border-medium:   rgba(0,0,0,0.12);
+    --header-border:   rgba(0,0,0,0.08);
+    --nav-bg:          rgba(241,245,249,0.92);
+    --nav-border:      rgba(0,0,0,0.09);
+    --text-primary:    rgba(15,23,42,0.92);
+    --text-secondary:  rgba(15,23,42,0.60);
+    --text-muted:      rgba(15,23,42,0.42);
+    --text-dim:        rgba(15,23,42,0.25);
+    --tab-active:      #0f172a;
+    --tab-inactive:    rgba(15,23,42,0.28);
+    --tab-label-active:  rgba(15,23,42,0.65);
+    --tab-label-inactive:rgba(15,23,42,0.22);
+    --slider-track:    rgba(0,0,0,0.10);
+    --input-bg:        rgba(0,0,0,0.05);
+    --input-border:    rgba(0,0,0,0.12);
+    --accent-time:     #0891b2;
+  }
+
   body {
-    background: #0a0a0f;
-    color: #fff;
+    background: var(--bg-app);
+    color: var(--text-primary);
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-  }
-
-  /* Light mode overrides — applied when html.light is set */
-  html.light body {
-    background: #f1f5f9;
-    color: #0f172a;
-  }
-
-  html.light #root {
-    background: #f1f5f9;
+    transition: background 0.20s ease, color 0.20s ease;
   }
 
   ::-webkit-scrollbar { display: none; }
