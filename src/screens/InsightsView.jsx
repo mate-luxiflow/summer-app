@@ -18,6 +18,12 @@ function fmtMin(mins) {
   return `${h}h ${m}m`
 }
 
+function shiftISO(iso, delta) {
+  const d = new Date(iso + 'T00:00:00')
+  d.setDate(d.getDate() + delta)
+  return d.toISOString().slice(0, 10)
+}
+
 // ── Data computation ───────────────────────────────────────────────────────────
 function computeDayStats(blocks) {
   const completed = blocks.filter(b => b.completed)
@@ -85,7 +91,6 @@ function HourlyChart({ hourlyData }) {
             )
           }
 
-          // Stack bottom→top: Positive (green) → Neutral (grey) → Negative (purple)
           const posH = d.positive * scale
           const neuH = d.neutral  * scale
           const negH = d.negative * scale
@@ -106,7 +111,6 @@ function HourlyChart({ hourlyData }) {
         })}
       </svg>
 
-      {/* X-axis hour labels */}
       <div className="relative mt-1.5" style={{ height: 12 }}>
         {[0, 6, 12, 18].map(h => (
           <span
@@ -125,7 +129,6 @@ function HourlyChart({ hourlyData }) {
         </span>
       </div>
 
-      {/* Y-axis labels */}
       <div className="flex items-end justify-between mt-1">
         <span className="text-[7px] text-white/18">0s</span>
         <span className="text-[7px] text-white/18">30m</span>
@@ -162,7 +165,6 @@ function WeeklyChart({ weekData }) {
             )
           }
 
-          // Proportional stacking to fill the scaled total bar height
           const totalH = Math.min(maxBarH, (total / maxVal) * maxBarH)
           const posH   = (d.positive / total) * totalH
           const neuH   = (d.neutral  / total) * totalH
@@ -185,7 +187,6 @@ function WeeklyChart({ weekData }) {
         })}
       </svg>
 
-      {/* Day labels */}
       <div className="flex mt-2">
         {DAY_LABELS.map((label, i) => (
           <div
@@ -219,7 +220,6 @@ function TrendChart({ trendData }) {
     y: padT + innerH - (d.total / maxVal) * innerH,
   }))
 
-  // Smooth cubic bezier through points
   function smoothPath(pts) {
     if (pts.length < 2) return ''
     let d = `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)}`
@@ -253,7 +253,6 @@ function TrendChart({ trendData }) {
         </linearGradient>
       </defs>
 
-      {/* Grid */}
       {[0.33, 0.66, 1].map((pct, idx) => (
         <line
           key={idx}
@@ -263,10 +262,8 @@ function TrendChart({ trendData }) {
         />
       ))}
 
-      {/* Area fill */}
       {areaPath && <path d={areaPath} fill="url(#trendFill)" />}
 
-      {/* Line */}
       {linePath && (
         <path
           d={linePath}
@@ -278,7 +275,6 @@ function TrendChart({ trendData }) {
         />
       )}
 
-      {/* Current-day endpoint dot */}
       {lastPt && (
         <>
           <circle cx={lastPt.x} cy={lastPt.y} r={4} fill="#06b6d4" />
@@ -290,10 +286,9 @@ function TrendChart({ trendData }) {
 }
 
 // ── Day tab ────────────────────────────────────────────────────────────────────
-function DayView({ stats }) {
+function DayView({ stats, viewDate, today }) {
   return (
     <div>
-      {/* Primary metric */}
       <div className="text-center py-8">
         <p className="text-[54px] font-black text-white leading-none tracking-tighter">
           {fmtMin(stats.total)}
@@ -304,7 +299,6 @@ function DayView({ stats }) {
         </p>
       </div>
 
-      {/* Hourly chart card */}
       <div
         className="rounded-2xl p-4 mb-5"
         style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
@@ -326,7 +320,6 @@ function DayView({ stats }) {
         <HourlyChart hourlyData={stats.hourly} />
       </div>
 
-      {/* Most logged activities */}
       {stats.topActivities.length > 0 && (
         <div>
           <p className="text-[9px] font-black uppercase tracking-[0.14em] mb-3"
@@ -379,9 +372,8 @@ function DayView({ stats }) {
         </div>
       )}
 
-      {/* Daily Journal Folder */}
       <div className="mt-5">
-        <DailyJournalFolder />
+        <DailyJournalFolder date={viewDate} />
       </div>
     </div>
   )
@@ -417,7 +409,6 @@ function WeekView({ weekStats, weekTotal, weekAvg }) {
         <WeeklyChart weekData={weekStats} />
       </div>
 
-      {/* Per-day breakdown */}
       <div className="grid grid-cols-7 gap-1">
         {['M','T','W','T','F','S','S'].map((label, i) => {
           const d     = weekStats[i]
@@ -482,7 +473,6 @@ function TrendView({ trendStats, trendDelta, trend30Total }) {
         <TrendChart trendData={trendStats} />
       </div>
 
-      {/* Stats summary row */}
       <div className="grid grid-cols-2 gap-3">
         <div
           className="rounded-2xl p-4"
@@ -513,105 +503,141 @@ function TrendView({ trendStats, trendDelta, trend30Total }) {
   )
 }
 
-// ── Daily Journal Folder ───────────────────────────────────────────────────────
-function DailyJournalFolder() {
-  const { journalSealed, saveDailyLog } = useAppContext()
-  const [open, setOpen]   = useState(false)
-  const [text, setText]   = useState(() => persistence.getDailyLog(todayISO()))
-  const textareaRef       = useRef(null)
+// ── Daily Journal Folder (date-aware, historical support) ──────────────────────
+function DailyJournalFolder({ date }) {
+  const { saveDailyLog } = useAppContext()
+  const today = todayISO()
+  const isToday = date === today
 
-  const formattedDate = new Date().toLocaleDateString('en-US', {
+  const [sealed,   setSealed]   = useState(() => persistence.getJournalClaimed(date))
+  const [text,     setText]     = useState(() => persistence.getDailyLog(date))
+  const [open,     setOpen]     = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const textareaRef = useRef(null)
+
+  // Reload state when navigating to a different date
+  useEffect(() => {
+    setSealed(persistence.getJournalClaimed(date))
+    setText(persistence.getDailyLog(date))
+    setOpen(false)
+    setEditMode(false)
+  }, [date])
+
+  const hasContent    = text.trim().length >= 5
+  const isReadOnly    = sealed && !editMode
+  const firstCreation = !sealed
+
+  const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   })
 
+  const preview = text.trim().slice(0, 80)
+
   useEffect(() => {
-    if (open) {
+    if (open && !isReadOnly) {
       setTimeout(() => textareaRef.current?.focus(), 120)
     }
-  }, [open])
+  }, [open, isReadOnly])
 
   function handleSave() {
-    if (text.trim().length < 5) return
-    saveDailyLog(text)
+    const trimmed = text.trim()
+    if (trimmed.length < 5) return
+    saveDailyLog(date, trimmed)
+    setSealed(true)
+    setEditMode(false)
     setOpen(false)
+  }
+
+  function handleClose() {
+    setOpen(false)
+    setEditMode(false)
   }
 
   const canSave = text.trim().length >= 5
 
+  // ── Closed card ──────────────────────────────────────────────────────────────
+  const cardBg = sealed
+    ? isToday ? 'rgba(34,197,94,0.07)'   : 'rgba(245,158,11,0.07)'
+    : 'rgba(255,255,255,0.03)'
+  const cardBorder = sealed
+    ? isToday ? 'rgba(34,197,94,0.28)'   : 'rgba(245,158,11,0.28)'
+    : 'rgba(255,255,255,0.08)'
+  const titleColor = sealed
+    ? isToday ? '#22c55e' : '#f59e0b'
+    : 'rgba(255,255,255,0.55)'
+  const emoji = sealed ? (isToday ? '📗' : '📙') : '📂'
+
+  const titleText = sealed
+    ? isToday ? '✓ File Sealed · +10m' : '✓ Entry Logged'
+    : 'Daily Reflection File'
+
+  const subtitleText = hasContent && sealed
+    ? null
+    : sealed
+      ? 'Tap to read or edit'
+      : isToday
+        ? 'Tap to open · earn +10 Store Min'
+        : 'Tap to add a reflection for this day'
+
   return (
     <>
-      {/* ── Compact folder card ── */}
       <motion.button
         onClick={() => setOpen(true)}
         whileTap={{ scale: 0.97 }}
-        className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl border transition-all duration-200 text-left"
-        style={{
-          background:   journalSealed ? 'rgba(34,197,94,0.07)' : 'rgba(255,255,255,0.03)',
-          borderColor:  journalSealed ? 'rgba(34,197,94,0.28)' : 'rgba(255,255,255,0.08)',
-          touchAction:  'manipulation',
-        }}
+        className="w-full flex items-start gap-3 px-4 py-3.5 rounded-2xl border transition-all duration-200 text-left"
+        style={{ background: cardBg, borderColor: cardBorder, touchAction: 'manipulation' }}
         aria-label="Open daily journal"
       >
-        <span className="text-xl shrink-0" aria-hidden>
-          {journalSealed ? '📗' : '📂'}
-        </span>
+        <span className="text-xl shrink-0 mt-0.5" aria-hidden>{emoji}</span>
         <div className="flex-1 min-w-0">
-          <p
-            className="text-[12px] font-black uppercase tracking-wider"
-            style={{ color: journalSealed ? '#22c55e' : 'rgba(255,255,255,0.55)' }}
-          >
-            {journalSealed ? '✓ File Sealed · +10m' : 'Daily Reflection File'}
+          <p className="text-[12px] font-black uppercase tracking-wider" style={{ color: titleColor }}>
+            {titleText}
           </p>
-          <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.22)' }}>
-            {journalSealed ? "Today's reflection is logged" : 'Tap to open · earn +10 Store Min'}
-          </p>
+          {hasContent && sealed ? (
+            <p className="text-[11px] mt-1 leading-relaxed"
+              style={{ color: 'rgba(255,255,255,0.35)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+              {preview}{text.trim().length > 80 ? '…' : ''}
+            </p>
+          ) : (
+            <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.22)' }}>
+              {subtitleText}
+            </p>
+          )}
         </div>
-        {!journalSealed && (
-          <svg
-            className="w-4 h-4 shrink-0"
-            style={{ color: 'rgba(255,255,255,0.16)' }}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-        )}
+        <svg className="w-4 h-4 shrink-0 mt-1" style={{ color: 'rgba(255,255,255,0.16)' }}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
       </motion.button>
 
       {/* ── Full-screen bottom drawer ── */}
       <AnimatePresence>
         {open && (
           <>
-            {/* Backdrop */}
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={{ duration: 0.20 }}
               className="fixed inset-0 z-50"
               style={{ background: 'rgba(0,0,0,0.80)', backdropFilter: 'blur(10px)' }}
-              onClick={() => setOpen(false)}
+              onClick={handleClose}
             />
 
-            {/* Sheet */}
             <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', stiffness: 340, damping: 36 }}
               className="fixed inset-x-0 bottom-0 z-50 rounded-t-3xl"
               style={{
-                background:   '#0d0d1a',
-                border:       '1px solid rgba(255,255,255,0.09)',
-                borderBottom: 'none',
+                background:    '#0d0d1a',
+                border:        '1px solid rgba(255,255,255,0.09)',
+                borderBottom:  'none',
                 paddingBottom: 'env(safe-area-inset-bottom, 20px)',
               }}
             >
-              {/* Drag handle */}
               <div className="w-10 h-1 rounded-full mx-auto mt-3 mb-5"
                 style={{ background: 'rgba(255,255,255,0.12)' }} />
 
               <div className="px-5 pb-6">
-                {/* Header row */}
+                {/* Header */}
                 <div className="flex items-start justify-between mb-5">
                   <div>
                     <p className="text-[16px] font-black text-white tracking-tight">Daily Reflection</p>
@@ -619,56 +645,87 @@ function DailyJournalFolder() {
                       {formattedDate}
                     </p>
                   </div>
-                  {!journalSealed && (
-                    <div
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl"
-                      style={{ background: 'rgba(34,197,94,0.10)', border: '1px solid rgba(34,197,94,0.28)' }}
-                    >
+                  {firstCreation && (
+                    <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl"
+                      style={{ background: 'rgba(34,197,94,0.10)', border: '1px solid rgba(34,197,94,0.28)' }}>
                       <span className="text-[11px] font-black" style={{ color: '#22c55e' }}>+10m</span>
                     </div>
                   )}
                 </div>
 
-                {/* Textarea */}
-                <textarea
-                  ref={textareaRef}
-                  value={text}
-                  onChange={e => setText(e.target.value)}
-                  placeholder="How did today go? What did you grind on? What will you change tomorrow?"
-                  rows={7}
-                  className="w-full rounded-2xl p-4 text-[14px] leading-[1.65] resize-none outline-none"
-                  style={{
-                    background:  'rgba(255,255,255,0.04)',
-                    border:      '1px solid rgba(255,255,255,0.08)',
-                    color:       'rgba(255,255,255,0.85)',
-                    caretColor:  '#22c55e',
-                  }}
-                />
+                {/* Read-only mode (sealed, not editing) */}
+                {isReadOnly ? (
+                  <>
+                    <div
+                      className="w-full rounded-2xl p-4 mb-4"
+                      style={{
+                        background: 'rgba(255,255,255,0.03)',
+                        border:     '1px solid rgba(255,255,255,0.07)',
+                        minHeight:  '160px',
+                      }}
+                    >
+                      <p className="text-[14px] leading-[1.65] whitespace-pre-wrap"
+                        style={{ color: 'rgba(255,255,255,0.75)' }}>
+                        {text || <span style={{ color: 'rgba(255,255,255,0.20)' }}>No text saved.</span>}
+                      </p>
+                    </div>
 
-                {/* Char hint */}
-                {!canSave && text.length > 0 && (
-                  <p className="text-[10px] mt-1.5 text-right" style={{ color: 'rgba(255,255,255,0.20)' }}>
-                    {5 - text.trim().length} more chars to unlock
-                  </p>
+                    <motion.button
+                      onClick={() => setEditMode(true)}
+                      whileTap={{ scale: 0.95 }}
+                      className="w-full py-3.5 rounded-2xl font-black text-[14px] transition-all duration-200 border"
+                      style={{
+                        background:  'rgba(255,255,255,0.05)',
+                        borderColor: 'rgba(255,255,255,0.12)',
+                        color:       'rgba(255,255,255,0.70)',
+                        touchAction: 'manipulation',
+                      }}
+                    >
+                      ✏️ Reopen &amp; Edit
+                    </motion.button>
+                  </>
+                ) : (
+                  <>
+                    {/* Edit mode */}
+                    <textarea
+                      ref={textareaRef}
+                      value={text}
+                      onChange={e => setText(e.target.value)}
+                      placeholder="How did today go? What did you grind on? What will you change tomorrow?"
+                      rows={7}
+                      className="w-full rounded-2xl p-4 text-[14px] leading-[1.65] resize-none outline-none"
+                      style={{
+                        background:  'rgba(255,255,255,0.04)',
+                        border:      '1px solid rgba(255,255,255,0.08)',
+                        color:       'rgba(255,255,255,0.85)',
+                        caretColor:  '#22c55e',
+                      }}
+                    />
+
+                    {!canSave && text.length > 0 && (
+                      <p className="text-[10px] mt-1.5 text-right" style={{ color: 'rgba(255,255,255,0.20)' }}>
+                        {5 - text.trim().length} more chars to unlock
+                      </p>
+                    )}
+
+                    <motion.button
+                      onClick={handleSave}
+                      disabled={!canSave}
+                      whileTap={{ scale: canSave ? 0.95 : 1 }}
+                      className="w-full mt-4 py-3.5 rounded-2xl font-black text-[14px] text-white transition-all duration-200 disabled:opacity-25"
+                      style={{
+                        background:  canSave
+                          ? 'linear-gradient(135deg, #22c55e, #16a34a)'
+                          : 'rgba(255,255,255,0.07)',
+                        boxShadow:   canSave ? '0 4px 22px rgba(34,197,94,0.32)' : 'none',
+                        touchAction: 'manipulation',
+                      }}
+                      aria-label="Save journal entry"
+                    >
+                      {firstCreation ? 'Seal the File · +10m' : 'Save Changes'}
+                    </motion.button>
+                  </>
                 )}
-
-                {/* Save button */}
-                <motion.button
-                  onClick={handleSave}
-                  disabled={!canSave}
-                  whileTap={{ scale: canSave ? 0.95 : 1 }}
-                  className="w-full mt-4 py-3.5 rounded-2xl font-black text-[14px] text-white transition-all duration-200 disabled:opacity-25"
-                  style={{
-                    background: canSave
-                      ? 'linear-gradient(135deg, #22c55e, #16a34a)'
-                      : 'rgba(255,255,255,0.07)',
-                    boxShadow: canSave ? '0 4px 22px rgba(34,197,94,0.32)' : 'none',
-                    touchAction: 'manipulation',
-                  }}
-                  aria-label="Save journal entry"
-                >
-                  {journalSealed ? 'Update Reflection' : 'Seal the File · +10m'}
-                </motion.button>
               </div>
             </motion.div>
           </>
@@ -684,10 +741,29 @@ export default function InsightsView({ onSettings }) {
   const [activeTab, setActiveTab] = useState('Day')
   const today = todayISO()
 
-  // Day stats (live from context)
-  const dayStats = useMemo(() => computeDayStats(blocks), [blocks])
+  // ── Day navigator state ──────────────────────────────────────────────────────
+  const [viewDate, setViewDate] = useState(today)
 
-  // Week stats (Mon → Sun of current week)
+  function shiftViewDate(delta) {
+    setViewDate(prev => {
+      const next = shiftISO(prev, delta)
+      return next > today ? today : next
+    })
+  }
+
+  const canGoForward = viewDate < today
+
+  const formattedViewDate = new Date(viewDate + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric',
+  })
+
+  // ── Day stats (uses viewDate for historical navigation) ──────────────────────
+  const dayStats = useMemo(() => {
+    const dayBlocks = viewDate === today ? blocks : (persistence.getRoutine(viewDate) ?? [])
+    return computeDayStats(dayBlocks)
+  }, [blocks, viewDate, today])
+
+  // ── Week stats ───────────────────────────────────────────────────────────────
   const weekStats = useMemo(() => {
     const now       = new Date()
     const dayOfWeek = now.getDay()
@@ -714,7 +790,7 @@ export default function InsightsView({ onSettings }) {
   const weekTotal = weekStats.reduce((s, d) => s + d.positive + d.neutral + d.negative, 0)
   const weekAvg   = Math.round(weekTotal / 7)
 
-  // Trend stats (last 30 days)
+  // ── Trend stats ──────────────────────────────────────────────────────────────
   const trendStats = useMemo(() => {
     return lastNDays(30).map(iso => {
       const isT       = iso === today
@@ -744,7 +820,6 @@ export default function InsightsView({ onSettings }) {
         }}
       >
         <div className="flex items-center justify-between">
-          {/* Settings gear */}
           <motion.button
             whileTap={{ scale: 0.87 }}
             onClick={onSettings}
@@ -758,10 +833,8 @@ export default function InsightsView({ onSettings }) {
             </svg>
           </motion.button>
 
-          {/* Title */}
           <h1 className="text-[17px] font-black text-white tracking-tight">Insights</h1>
 
-          {/* Brand conic dot */}
           <div className="w-10 h-10 flex items-center justify-center">
             <div
               className="w-7 h-7 rounded-full"
@@ -800,24 +873,60 @@ export default function InsightsView({ onSettings }) {
           ))}
         </div>
 
-        {/* Period label */}
-        <div className="flex items-center gap-1.5 mt-3">
-          <svg
-            className="w-3.5 h-3.5"
-            style={{ color: 'rgba(255,255,255,0.25)' }}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-          <span
-            className="text-[10px] font-black uppercase tracking-[0.18em]"
-            style={{ color: 'rgba(255,255,255,0.30)' }}
-          >
-            {activeTab === 'Day'  ? 'Today'
-           : activeTab === 'Week' ? 'This Week'
-           :                        'Last 30 Days'}
-          </span>
-        </div>
+        {/* ── Period label / Day navigator ── */}
+        {activeTab === 'Day' ? (
+          <div className="flex items-center justify-between mt-3">
+            <motion.button
+              onClick={() => shiftViewDate(-1)}
+              whileTap={{ scale: 0.85 }}
+              className="w-8 h-8 flex items-center justify-center rounded-xl border border-white/8"
+              style={{ color: 'rgba(255,255,255,0.40)', touchAction: 'manipulation' }}
+              aria-label="Previous day"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </motion.button>
+
+            <div className="flex items-center gap-2">
+              {viewDate === today && (
+                <span
+                  className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full"
+                  style={{ background: 'rgba(37,99,235,0.18)', color: '#60a5fa' }}
+                >
+                  Today
+                </span>
+              )}
+              <span className="text-[12px] font-bold tabular-nums" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                {formattedViewDate}
+              </span>
+            </div>
+
+            <motion.button
+              onClick={() => shiftViewDate(1)}
+              disabled={!canGoForward}
+              whileTap={{ scale: canGoForward ? 0.85 : 1 }}
+              className="w-8 h-8 flex items-center justify-center rounded-xl border border-white/8 disabled:opacity-20"
+              style={{ color: 'rgba(255,255,255,0.40)', touchAction: 'manipulation' }}
+              aria-label="Next day"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </motion.button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 mt-3">
+            <svg className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.25)' }}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            <span className="text-[10px] font-black uppercase tracking-[0.18em]"
+              style={{ color: 'rgba(255,255,255,0.30)' }}>
+              {activeTab === 'Week' ? 'This Week' : 'Last 30 Days'}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ── Tab content ───────────────────────────────────────────────────── */}
@@ -830,7 +939,7 @@ export default function InsightsView({ onSettings }) {
           transition={{ duration: 0.18, ease: 'easeOut' }}
           className="px-4 pb-32"
         >
-          {activeTab === 'Day'   && <DayView   stats={dayStats} />}
+          {activeTab === 'Day'   && <DayView   stats={dayStats} viewDate={viewDate} today={today} />}
           {activeTab === 'Week'  && <WeekView  weekStats={weekStats} weekTotal={weekTotal} weekAvg={weekAvg} />}
           {activeTab === 'Trend' && <TrendView trendStats={trendStats} trendDelta={trendDelta} trend30Total={trend30Total} />}
         </motion.div>

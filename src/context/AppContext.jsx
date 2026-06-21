@@ -254,13 +254,13 @@ export function AppContextProvider({ children }) {
     })
   }, [])
 
-  const saveDailyLog = useCallback((text) => {
+  const saveDailyLog = useCallback((date, text) => {
     const trimmed = text.trim()
     if (trimmed.length < 5) return
-    persistence.setDailyLog(iso, trimmed)
-    if (!persistence.getJournalClaimed(iso)) {
-      persistence.setJournalClaimed(iso)
-      setJournalSealed(true)
+    persistence.setDailyLog(date, trimmed)
+    if (!persistence.getJournalClaimed(date)) {
+      persistence.setJournalClaimed(date)
+      if (date === iso) setJournalSealed(true)
       setStoreMinutes(m => {
         const n = m + 10
         persistence.setStoreMinutes(n)
