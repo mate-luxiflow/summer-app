@@ -104,7 +104,7 @@ function SettingsCard({ children, className = '' }) {
 }
 
 // ── Check-in History Row ───────────────────────────────────────────────────────
-function HistoryItem({ iso, data, isLast }) {
+function HistoryItem({ iso, data, isLast, t }) {
   const moodPct  = (data.mood  / 10) * 100
   const focusPct = (data.focus / 10) * 100
   const savedTime = data.savedAt
@@ -131,7 +131,7 @@ function HistoryItem({ iso, data, isLast }) {
       {/* Mood bar */}
       <div className="flex items-center gap-2 mb-1.5">
         <span className="text-[9px] font-bold uppercase tracking-wider w-9" style={{ color: 'var(--text-muted)' }}>
-          Mood
+          {t('moodStat')}
         </span>
         <div className="flex-1 h-1.5 rounded-full" style={{ background: 'var(--slider-track)' }}>
           <div
@@ -147,7 +147,7 @@ function HistoryItem({ iso, data, isLast }) {
       {/* Focus bar */}
       <div className="flex items-center gap-2">
         <span className="text-[9px] font-bold uppercase tracking-wider w-9" style={{ color: 'var(--text-muted)' }}>
-          Focus
+          {t('focusStat')}
         </span>
         <div className="flex-1 h-1.5 rounded-full" style={{ background: 'var(--slider-track)' }}>
           <div
@@ -376,7 +376,7 @@ export default function SettingsView() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <p className="text-[10px] font-semibold" style={{ color: 'rgba(6,182,212,0.85)' }}>
-                Active — new day begins at <strong>{dayStart}</strong>
+                {t('dayStartActive')} <strong>{dayStart}</strong>
               </p>
             </div>
           )}
@@ -395,7 +395,7 @@ export default function SettingsView() {
                 {t('checkinTimeLabel')}
               </p>
               <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>
-                Auto-popup if no check-in yet
+                {t('checkinAutoPopup')}
               </p>
             </div>
             <input
@@ -423,7 +423,7 @@ export default function SettingsView() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
               <p className="text-[10px] font-semibold" style={{ color: 'rgba(34,197,94,0.85)' }}>
-                Today's check-in saved at {lastSavedTime}
+                {t('checkinSavedAt')} {lastSavedTime}
               </p>
             </div>
           )}
@@ -487,6 +487,7 @@ export default function SettingsView() {
                   iso={iso}
                   data={data}
                   isLast={idx === checkInHistory.length - 1}
+                  t={t}
                 />
               ))}
             </div>

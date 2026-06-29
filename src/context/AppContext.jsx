@@ -141,28 +141,36 @@ export function AppContextProvider({ children }) {
   const [checkInTime,    setCheckInTimeState]   = useState(() => persistence.getCheckInTime())
   const [showCheckInModal, setShowCheckInModal] = useState(false)
 
-  // ── Theme effect: toggle dark/light class on <html> ──────────────────────────
+  // ── Theme effect: toggle dark/light on <html> + mobile PWA overrides ─────────
   useEffect(() => {
     const root = document.documentElement
     if (theme === 'light') {
       root.classList.remove('dark')
       root.classList.add('light')
+      root.style.colorScheme = 'light'
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#f8fafc')
     } else {
       root.classList.remove('light')
       root.classList.add('dark')
+      root.style.colorScheme = 'dark'
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#0b0b12')
     }
   }, [theme])
 
-  // ── Init: apply saved theme immediately ──────────────────────────────────────
+  // ── Init: apply saved theme synchronously before first paint ──────────────────
   useEffect(() => {
-    const root = document.documentElement
+    const root  = document.documentElement
     const saved = persistence.getTheme()
     if (saved === 'light') {
       root.classList.remove('dark')
       root.classList.add('light')
+      root.style.colorScheme = 'light'
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#f8fafc')
     } else {
       root.classList.remove('light')
       root.classList.add('dark')
+      root.style.colorScheme = 'dark'
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#0b0b12')
     }
   }, [])
 

@@ -284,7 +284,7 @@ function TrendChart({ trendData }) {
 }
 
 // ── Day tab ────────────────────────────────────────────────────────────────────
-function DayView({ stats, viewDate, today }) {
+function DayView({ stats, viewDate, today, t, language }) {
   return (
     <div>
       <div className="text-center py-8">
@@ -293,7 +293,7 @@ function DayView({ stats, viewDate, today }) {
         </p>
         <p className="text-[10px] font-black uppercase tracking-[0.22em] mt-2"
           style={{ color: 'rgba(255,255,255,0.28)' }}>
-          Audited Time
+          {t('auditedTime')}
         </p>
       </div>
 
@@ -304,10 +304,10 @@ function DayView({ stats, viewDate, today }) {
         <div className="flex items-center justify-between mb-3">
           <p className="text-[9px] font-black uppercase tracking-[0.14em]"
             style={{ color: 'rgba(255,255,255,0.25)' }}>
-            Hourly Breakdown
+            {t('hourlyBreakdown')}
           </p>
           <div className="flex items-center gap-2.5">
-            {[['#10b981', 'Pos'], ['#64748b', 'Neu'], ['#a855f7', 'Neg']].map(([color, label]) => (
+            {[['#10b981', t('typePos')], ['#64748b', t('typeNeu')], ['#a855f7', t('typeNeg')]].map(([color, label]) => (
               <div key={label} className="flex items-center gap-1">
                 <div className="w-2 h-2 rounded-full" style={{ background: color }} />
                 <span className="text-[8px] font-bold" style={{ color: 'rgba(255,255,255,0.28)' }}>{label}</span>
@@ -322,12 +322,12 @@ function DayView({ stats, viewDate, today }) {
         <div>
           <p className="text-[9px] font-black uppercase tracking-[0.14em] mb-3"
             style={{ color: 'rgba(255,255,255,0.25)' }}>
-            Most Logged Activities
+            {t('mostLoggedActivities')}
           </p>
           <div className="flex flex-col gap-2">
             {stats.topActivities.map((act, i) => {
               const typeColor = act.type === 'positive' ? '#10b981' : act.type === 'negative' ? '#a855f7' : '#64748b'
-              const typeLabel = act.type === 'positive' ? 'Positive' : act.type === 'negative' ? 'Negative' : 'Neutral'
+              const typeLabel = act.type === 'positive' ? t('typePositive') : act.type === 'negative' ? t('typeNegative') : t('typeNeutral')
               return (
                 <div
                   key={i}
@@ -365,21 +365,21 @@ function DayView({ stats, viewDate, today }) {
         <div className="text-center py-8">
           <div className="text-3xl mb-2 opacity-20">📊</div>
           <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.18)' }}>
-            Complete routine blocks to see your stats
+            {t('noStatsHint')}
           </p>
         </div>
       )}
 
       <div className="mt-5">
         <DailyJournalFolder date={viewDate} />
-        <MoodFocusRow date={viewDate} />
+        <MoodFocusRow date={viewDate} t={t} />
       </div>
     </div>
   )
 }
 
 // ── Week tab ───────────────────────────────────────────────────────────────────
-function WeekView({ weekStats, weekTotal, weekAvg }) {
+function WeekView({ weekStats, weekTotal, weekAvg, t }) {
   return (
     <div>
       <div className="text-center py-8">
@@ -388,7 +388,7 @@ function WeekView({ weekStats, weekTotal, weekAvg }) {
         </p>
         <p className="text-[10px] font-black uppercase tracking-[0.22em] mt-2"
           style={{ color: 'rgba(255,255,255,0.28)' }}>
-          Daily Average
+          {t('dailyAverage')}
         </p>
       </div>
 
@@ -399,10 +399,10 @@ function WeekView({ weekStats, weekTotal, weekAvg }) {
         <div className="flex items-center justify-between mb-3">
           <p className="text-[9px] font-black uppercase tracking-[0.14em]"
             style={{ color: 'rgba(255,255,255,0.25)' }}>
-            This Week
+            {t('thisWeek')}
           </p>
           <span className="text-[10px] font-bold tabular-nums" style={{ color: 'rgba(255,255,255,0.28)' }}>
-            {fmtMin(weekTotal)} total
+            {fmtMin(weekTotal)} {t('weekTotalSuffix')}
           </span>
         </div>
         <WeeklyChart weekData={weekStats} />
@@ -438,7 +438,7 @@ function WeekView({ weekStats, weekTotal, weekAvg }) {
 }
 
 // ── Trend tab ──────────────────────────────────────────────────────────────────
-function TrendView({ trendStats, trendDelta, trend30Total }) {
+function TrendView({ trendStats, trendDelta, trend30Total, t }) {
   const isPositive = trendDelta >= 0
 
   return (
@@ -452,7 +452,7 @@ function TrendView({ trendStats, trendDelta, trend30Total }) {
         </p>
         <p className="text-[10px] font-black uppercase tracking-[0.22em] mt-2"
           style={{ color: 'rgba(255,255,255,0.28)' }}>
-          {isPositive ? 'More than prev. 2 weeks' : 'Less than prev. 2 weeks'}
+          {isPositive ? t('moreThanPrev2w') : t('lessThanPrev2w')}
         </p>
       </div>
 
@@ -463,10 +463,10 @@ function TrendView({ trendStats, trendDelta, trend30Total }) {
         <div className="flex items-center justify-between mb-3">
           <p className="text-[9px] font-black uppercase tracking-[0.14em]"
             style={{ color: 'rgba(255,255,255,0.25)' }}>
-            30-Day Trend
+            {t('thirtyDayTrend')}
           </p>
           <span className="text-[10px] font-bold tabular-nums" style={{ color: 'rgba(255,255,255,0.28)' }}>
-            {fmtMin(trend30Total)} total
+            {fmtMin(trend30Total)} {t('weekTotalSuffix')}
           </span>
         </div>
         <TrendChart trendData={trendStats} />
@@ -479,7 +479,7 @@ function TrendView({ trendStats, trendDelta, trend30Total }) {
         >
           <p className="text-[9px] font-black uppercase tracking-widest mb-1"
             style={{ color: 'rgba(6,182,212,0.60)' }}>
-            Avg / Day
+            {t('avgPerDay')}
           </p>
           <p className="text-[22px] font-black text-white/85 leading-none tabular-nums">
             {fmtMin(Math.round(trend30Total / 30))}
@@ -491,7 +491,7 @@ function TrendView({ trendStats, trendDelta, trend30Total }) {
         >
           <p className="text-[9px] font-black uppercase tracking-widest mb-1"
             style={{ color: 'rgba(168,85,247,0.60)' }}>
-            30-Day Total
+            {t('thirtyDayTotal')}
           </p>
           <p className="text-[22px] font-black text-white/85 leading-none tabular-nums">
             {fmtMin(trend30Total)}
@@ -503,7 +503,7 @@ function TrendView({ trendStats, trendDelta, trend30Total }) {
 }
 
 // ── Mood & Focus mini-row ──────────────────────────────────────────────────────
-function MoodFocusRow({ date }) {
+function MoodFocusRow({ date, t }) {
   const data = persistence.getMoodData(date)
   if (!data) return null
 
@@ -514,6 +514,9 @@ function MoodFocusRow({ date }) {
         style={{ background: 'rgba(249,115,22,0.10)', border: '1px solid rgba(249,115,22,0.22)' }}
       >
         <span className="text-[10px]" aria-hidden>😊</span>
+        <span className="text-[9px] font-black uppercase tracking-wide" style={{ color: 'rgba(249,115,22,0.65)' }}>
+          {t('moodStat')}
+        </span>
         <span className="text-[10px] font-black tabular-nums" style={{ color: '#f97316' }}>
           {data.mood}<span style={{ opacity: 0.5 }}>/10</span>
         </span>
@@ -523,6 +526,9 @@ function MoodFocusRow({ date }) {
         style={{ background: 'rgba(6,182,212,0.10)', border: '1px solid rgba(6,182,212,0.22)' }}
       >
         <span className="text-[10px]" aria-hidden>🎯</span>
+        <span className="text-[9px] font-black uppercase tracking-wide" style={{ color: 'rgba(6,182,212,0.65)' }}>
+          {t('focusStat')}
+        </span>
         <span className="text-[10px] font-black tabular-nums" style={{ color: '#06b6d4' }}>
           {data.focus}<span style={{ opacity: 0.5 }}>/10</span>
         </span>
@@ -533,7 +539,7 @@ function MoodFocusRow({ date }) {
 
 // ── Daily Journal Folder (date-aware, historical support) ──────────────────────
 function DailyJournalFolder({ date }) {
-  const { saveDailyLog } = useAppContext()
+  const { saveDailyLog, t, language } = useAppContext()
   const today = todayISO()
   const isToday = date === today
 
@@ -553,11 +559,10 @@ function DailyJournalFolder({ date }) {
 
   const hasContent    = text.trim().length >= 5
   // A mai napló SOHA nem kerülhet read-only módba — éjfélig szabadon szerkeszthető.
-  // Régebbi napoknál: sealed + nem editMode → read-only (Reopen & Edit gomb jelenik meg).
   const isReadOnly    = sealed && !isToday && !editMode
   const firstCreation = !sealed
 
-  const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+  const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString(language, {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   })
 
@@ -598,16 +603,16 @@ function DailyJournalFolder({ date }) {
   const emoji = sealed ? (isToday ? '📗' : '📙') : '📂'
 
   const titleText = sealed
-    ? isToday ? '✓ File Sealed · +10m' : '✓ Entry Logged'
-    : 'Daily Reflection File'
+    ? isToday ? t('journalFileSealed') : t('journalEntryLogged')
+    : t('journalFileTitle')
 
   const subtitleText = hasContent && sealed
     ? null
     : sealed
-      ? isToday ? 'Tap to keep writing' : 'Tap to read or edit'
+      ? isToday ? t('journalTapKeepWriting') : t('journalTapReadEdit')
       : isToday
-        ? 'Tap to open · earn +10 Store Min'
-        : 'Tap to add a reflection for this day'
+        ? t('journalTapOpen')
+        : t('journalTapAdd')
 
   return (
     <>
@@ -670,7 +675,7 @@ function DailyJournalFolder({ date }) {
                 {/* Header */}
                 <div className="flex items-start justify-between mb-5">
                   <div>
-                    <p className="text-[16px] font-black text-white tracking-tight">Daily Reflection</p>
+                    <p className="text-[16px] font-black text-white tracking-tight">{t('journalDrawerTitle')}</p>
                     <p className="text-[11px] mt-0.5 font-medium" style={{ color: 'rgba(255,255,255,0.28)' }}>
                       {formattedDate}
                     </p>
@@ -696,7 +701,7 @@ function DailyJournalFolder({ date }) {
                     >
                       <p className="text-[14px] leading-[1.65] whitespace-pre-wrap"
                         style={{ color: 'rgba(255,255,255,0.75)' }}>
-                        {text || <span style={{ color: 'rgba(255,255,255,0.20)' }}>No text saved.</span>}
+                        {text || <span style={{ color: 'rgba(255,255,255,0.20)' }}>{t('journalNoText')}</span>}
                       </p>
                     </div>
 
@@ -711,7 +716,7 @@ function DailyJournalFolder({ date }) {
                         touchAction: 'manipulation',
                       }}
                     >
-                      ✏️ Reopen &amp; Edit
+                      ✏️ {t('journalReopenEdit')}
                     </motion.button>
                   </>
                 ) : (
@@ -721,7 +726,7 @@ function DailyJournalFolder({ date }) {
                       ref={textareaRef}
                       value={text}
                       onChange={e => setText(e.target.value)}
-                      placeholder="How did today go? What did you grind on? What will you change tomorrow?"
+                      placeholder={t('journalPlaceholder')}
                       rows={7}
                       className="w-full rounded-2xl p-4 text-[14px] leading-[1.65] resize-none outline-none"
                       style={{
@@ -734,7 +739,7 @@ function DailyJournalFolder({ date }) {
 
                     {!canSave && text.length > 0 && (
                       <p className="text-[10px] mt-1.5 text-right" style={{ color: 'rgba(255,255,255,0.20)' }}>
-                        {5 - text.trim().length} more chars to unlock
+                        {5 - text.trim().length} {t('journalCharsLeft')}
                       </p>
                     )}
 
@@ -752,7 +757,7 @@ function DailyJournalFolder({ date }) {
                       }}
                       aria-label="Save journal entry"
                     >
-                      {firstCreation ? 'Seal the File · +10m' : 'Save Changes'}
+                      {firstCreation ? t('journalSealFile') : t('journalSaveChanges')}
                     </motion.button>
                   </>
                 )}
@@ -767,7 +772,7 @@ function DailyJournalFolder({ date }) {
 
 // ── Main InsightsView ──────────────────────────────────────────────────────────
 export default function InsightsView({ onSettings }) {
-  const { blocks, t } = useAppContext()
+  const { blocks, t, language } = useAppContext()
 
   // Internal keys stay stable; only display labels are translated
   const TABS = [
@@ -791,7 +796,7 @@ export default function InsightsView({ onSettings }) {
 
   const canGoForward = viewDate < today
 
-  const formattedViewDate = new Date(viewDate + 'T00:00:00').toLocaleDateString('en-US', {
+  const formattedViewDate = new Date(viewDate + 'T00:00:00').toLocaleDateString(language, {
     weekday: 'short', month: 'short', day: 'numeric',
   })
 
@@ -932,7 +937,7 @@ export default function InsightsView({ onSettings }) {
                   className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full"
                   style={{ background: 'rgba(37,99,235,0.18)', color: '#60a5fa' }}
                 >
-                  Today
+                  {t('today')}
                 </span>
               )}
               <span className="text-[12px] font-bold tabular-nums" style={{ color: 'rgba(255,255,255,0.55)' }}>
@@ -961,7 +966,7 @@ export default function InsightsView({ onSettings }) {
             </svg>
             <span className="text-[10px] font-black uppercase tracking-[0.18em]"
               style={{ color: 'rgba(255,255,255,0.30)' }}>
-              {activeTab === 'Week' ? t('week') : 'Last 30 Days'}
+              {activeTab === 'Week' ? t('week') : t('last30Days')}
             </span>
           </div>
         )}
@@ -977,9 +982,9 @@ export default function InsightsView({ onSettings }) {
           transition={{ duration: 0.18, ease: 'easeOut' }}
           className="px-4 pb-32"
         >
-          {activeTab === 'Day'   && <DayView   stats={dayStats} viewDate={viewDate} today={today} />}
-          {activeTab === 'Week'  && <WeekView  weekStats={weekStats} weekTotal={weekTotal} weekAvg={weekAvg} />}
-          {activeTab === 'Trend' && <TrendView trendStats={trendStats} trendDelta={trendDelta} trend30Total={trend30Total} />}
+          {activeTab === 'Day'   && <DayView   stats={dayStats} viewDate={viewDate} today={today} t={t} language={language} />}
+          {activeTab === 'Week'  && <WeekView  weekStats={weekStats} weekTotal={weekTotal} weekAvg={weekAvg} t={t} />}
+          {activeTab === 'Trend' && <TrendView trendStats={trendStats} trendDelta={trendDelta} trend30Total={trend30Total} t={t} />}
         </motion.div>
       </AnimatePresence>
     </div>
